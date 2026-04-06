@@ -65,8 +65,11 @@ function normalizeLibrarySettings(value?: Partial<LumioplayLibrarySettings> | nu
   }
 }
 
-function normalizeExtension(fileName: string): string {
-  const lowerName = fileName.toLowerCase()
+function normalizeExtension(fileName?: string | null): string {
+  if (typeof fileName !== 'string') return ''
+  const trimmedFileName = fileName.trim()
+  if (!trimmedFileName) return ''
+  const lowerName = trimmedFileName.toLowerCase()
   const match = IMPORTABLE_ROM_EXTENSIONS
     .slice()
     .sort((left, right) => right.length - left.length)
@@ -76,7 +79,8 @@ function normalizeExtension(fileName: string): string {
   return dotIndex >= 0 ? lowerName.slice(dotIndex) : ''
 }
 
-function createGameTitle(fileName: string): string {
+function createGameTitle(fileName?: string | null): string {
+  if (typeof fileName !== 'string') return ''
   const normalized = fileName.replace(/\.[^/.]+$/, '')
   return normalized
     .replace(/[_+.]+/g, ' ')
@@ -84,7 +88,7 @@ function createGameTitle(fileName: string): string {
     .trim()
 }
 
-export function detectPlatformByFileName(fileName: string): LumioplayPlatformDefinition | null {
+export function detectPlatformByFileName(fileName?: string | null): LumioplayPlatformDefinition | null {
   const extension = normalizeExtension(fileName)
   if (!extension) return null
   return (
@@ -175,9 +179,14 @@ export function getLibrary(): LumioplayLibraryDatabase {
     const raw = getScopedStorageItem(KEY_LIBRARY)
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LumioplayLibraryDatabase>
-      return {
-        version: 2,
-        games: normalizeGames((parsed.games ?? []).map((game) => ({
+      const normalizedGames = (parsed.games ?? [])
+        .filter((game): game is LumioplayGame => {
+          if (!game || typeof game !== 'object') return false
+          if (typeof game.fileName !== 'string' || !game.fileName.trim()) return false
+          if (typeof game.romPath !== 'string' || !game.romPath.trim()) return false
+          return detectPlatformByFileName(game.fileName) != null
+        })
+        .map((game) => ({
           ...game,
           favorite: game.favorite ?? false,
           missing: game.missing ?? false,
@@ -188,7 +197,10 @@ export function getLibrary(): LumioplayLibraryDatabase {
           lastIndexedAt: game.lastIndexedAt ?? game.importedAt ?? null,
           metadata: game.metadata ?? buildMetadataFromFileName(game.fileName, game.platform),
           coverUrl: game.coverUrl ?? null,
-        }))),
+        }))
+      return {
+        version: 2,
+        games: normalizeGames(normalizedGames),
         settings: normalizeLibrarySettings(parsed.settings),
         updatedAt: parsed.updatedAt ?? nowIso(),
       }
@@ -237,16 +249,19 @@ export function createImportedGame(params: {
   fileSizeBytes?: number | null
   sourceFolder?: string | null
 }): LumioplayGame | null {
-  const platform = detectPlatformByFileName(params.fileName)
+  const safeFileName = typeof params.fileName === 'string' ? params.fileName.trim() : ''
+  const safeRomPath = typeof params.romPath === 'string' ? params.romPath.trim() : ''
+  if (!safeFileName || !safeRomPath) return null
+  const platform = detectPlatformByFileName(safeFileName)
   if (!platform || platform.id === 'all') return null
-  const extension = normalizeExtension(params.fileName)
-  const metadata = buildMetadataFromFileName(params.fileName, platform.id)
+  const extension = normalizeExtension(safeFileName)
+  const metadata = buildMetadataFromFileName(safeFileName, platform.id)
   return {
-    id: buildGameId(params.romPath, params.fileName),
-    title: metadata.displayTitle || createGameTitle(params.fileName),
+    id: buildGameId(safeRomPath, safeFileName),
+    title: metadata.displayTitle || createGameTitle(safeFileName),
     platform: platform.id,
-    romPath: params.romPath,
-    fileName: params.fileName,
+    romPath: safeRomPath,
+    fileName: safeFileName,
     extension,
     coreId: platform.coreId,
     coreOverride: null,

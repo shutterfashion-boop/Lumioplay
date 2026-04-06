@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2
+
+- Fixed ROM folder scans from the Lumio desktop app by normalizing file payloads from the host bridge.
+- Hardened library import and storage reads so invalid file entries no longer crash Lumioplay during startup or sync.
+
 ## 0.2.1
 
 - Fixed the external plugin host bridge so Lumioplay can detect the Lumio desktop app and use desktop-only helpers

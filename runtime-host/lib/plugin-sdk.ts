@@ -31,6 +31,11 @@ export interface PluginIndexedFile {
   sizeBytes?: number | null
 }
 
+type PluginIndexedFilePayload = PluginIndexedFile & {
+  file_name?: string
+  size_bytes?: number | null
+}
+
 export interface BrowsePageTarget {
   pageId: string
   params?: Record<string, string>
@@ -160,7 +165,12 @@ export async function scanPluginDirectory(
   directory: string,
   extensions?: string[],
 ): Promise<PluginIndexedFile[] | null> {
-  return getRuntimeSdk()?.scanPluginDirectory(directory, extensions) ?? null
+  const files = await (getRuntimeSdk()?.scanPluginDirectory(directory, extensions) ?? null)
+  return (files as PluginIndexedFilePayload[] | null)?.map((file) => ({
+    path: file.path,
+    fileName: file.fileName ?? file.file_name ?? '',
+    sizeBytes: file.sizeBytes ?? file.size_bytes ?? null,
+  })) ?? null
 }
 
 export async function executePluginDesktopCommand(
@@ -182,4 +192,3 @@ export async function spawnPluginDesktopCommand(
   }
   return sdk.spawnPluginDesktopCommand(options)
 }
-
