@@ -115,6 +115,8 @@ type PluginRuntimeSdk = {
   scanPluginDirectory(directory: string, extensions?: string[]): Promise<PluginIndexedFile[] | null>
   executePluginDesktopCommand(options: PluginDesktopCommandOptions): Promise<PluginDesktopCommandResult>
   spawnPluginDesktopCommand(options: PluginDesktopCommandOptions): Promise<PluginDesktopSpawnResult>
+  checkPluginPathExists(path: string): Promise<boolean>
+  launchPluginProgram(program: string, args: string[]): Promise<number>
 }
 
 declare global {
@@ -191,4 +193,16 @@ export async function spawnPluginDesktopCommand(
     throw new Error('Desktop command execution is only available in the Lumio desktop host.')
   }
   return sdk.spawnPluginDesktopCommand(options)
+}
+
+export async function checkPluginPathExists(path: string): Promise<boolean> {
+  return getRuntimeSdk()?.checkPluginPathExists(path) ?? false
+}
+
+export async function launchPluginProgram(program: string, args: string[]): Promise<number> {
+  const sdk = getRuntimeSdk()
+  if (!sdk) {
+    throw new Error('Program launch is only available in the Lumio desktop host.')
+  }
+  return sdk.launchPluginProgram(program, args)
 }

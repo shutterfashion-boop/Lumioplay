@@ -1,7 +1,7 @@
 import {
-  executePluginDesktopCommand,
+  checkPluginPathExists,
   isPluginDesktopHost,
-  spawnPluginDesktopCommand,
+  launchPluginProgram,
 } from '@/lib/plugin-sdk'
 import {
   getEffectiveCoreId,
@@ -106,14 +106,9 @@ export function getSuggestedRetroArchSetup(): RetroArchSuggestedSetup {
   }
 }
 
-async function pathExists(path: string, executable = false): Promise<boolean> {
+async function pathExists(path: string): Promise<boolean> {
   if (getHostOs() === 'windows') return true
-  const args = executable ? ['-x', path] : ['-e', path]
-  const check = await executePluginDesktopCommand({
-    program: '/bin/test',
-    args,
-  })
-  return check.code === 0
+  return checkPluginPathExists(path)
 }
 
 export async function validateRetroArchSetup(
@@ -140,7 +135,7 @@ export async function validateRetroArchSetup(
     }
   }
 
-  if (executablePath && !(await pathExists(executablePath, true))) {
+  if (executablePath && !(await pathExists(executablePath))) {
     details.push('RetroArch-binären kunde inte hittas på den angivna sökvägen.')
   }
   if (coresPath && !(await pathExists(coresPath))) {
@@ -186,7 +181,7 @@ export function getRetroArchLaunchConfig(game: LumioplayGame): RetroArchLaunchCo
 async function verifyLaunchConfig(config: RetroArchLaunchConfig): Promise<void> {
   if (getHostOs() === 'windows') return
 
-  const executableExists = await pathExists(config.executablePath, true)
+  const executableExists = await pathExists(config.executablePath)
   if (!executableExists) {
     throw new Error('RetroArch-binären kunde inte hittas. Kontrollera sökvägen i inställningarna.')
   }
@@ -195,6 +190,15 @@ async function verifyLaunchConfig(config: RetroArchLaunchConfig): Promise<void> 
   if (!coreExists) {
     throw new Error('Libretro-coren kunde inte hittas. Kontrollera core-mappen eller välj en annan core för spelet.')
   }
+}
+
+export async function launchRetroArch(executablePath: string): Promise<void> {
+  if (!isPluginDesktopHost()) {
+    throw new Error('RetroArch-launch är bara tillgänglig i desktop-appen.')
+  }
+  const resolved = inferRetroArchExecutablePath(executablePath)
+  if (!resolved) throw new Error('Ställ in RetroArch-sökväg i inställningarna först.')
+  await launchPluginProgram(resolved, [])
 }
 
 export async function launchGameWithRetroArch(game: LumioplayGame): Promise<void> {
@@ -214,9 +218,6 @@ export async function launchGameWithRetroArch(game: LumioplayGame): Promise<void
   }
 
   await verifyLaunchConfig(config)
-  await spawnPluginDesktopCommand({
-    program: config.executablePath,
-    args: ['-L', config.corePath, game.romPath],
-  })
+  await launchPluginProgram(config.executablePath, ['-L', config.corePath, game.romPath])
 }
 

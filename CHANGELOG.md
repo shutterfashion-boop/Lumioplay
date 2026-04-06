@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.2
+
+- Fixed desktop detection: `isPluginDesktopHost()` now evaluates after mount so the SDK bridge is guaranteed to be ready, fixing "Desktop krävs" showing incorrectly and the missing sync button
+- Fixed game launch crash: path checking and program launch now use Rust-side Tauri commands instead of the shell plugin, bypassing scope validation errors
+- Added "Öppna RetroArch" button in settings → launches RetroArch directly so you can download cores via its built-in Load Core → Download a Core menu
+
 ## 0.3.1
 
 - Redesigned game cards to match Lumio's movie grid — transparent background, no card border, poster-first with info below using the same minimal style as media cards

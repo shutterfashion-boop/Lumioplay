@@ -358,13 +358,17 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   })
   const [editingGameId, setEditingGameId] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
+  const [desktopReady, setDesktopReady] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
   const syncInFlightRef = useRef(false)
-  const desktopReady = isPluginDesktopHost()
   const savedFolders = getRomFolders()
   const autoSyncEnabled = getAutoSyncEnabled()
   const autoSyncIntervalSeconds = getAutoSyncIntervalSeconds()
+
+  useEffect(() => {
+    setDesktopReady(isPluginDesktopHost())
+  }, [])
   const availablePlatformIds = Array.from(new Set(games.map((game) => getEffectivePlatform(game))))
   const resolvedPlatform =
     platform !== 'all' && availablePlatformIds.includes(platform as LumioplayConsoleId)
