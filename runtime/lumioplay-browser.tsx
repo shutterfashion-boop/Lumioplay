@@ -54,13 +54,22 @@ function sortGames(games: LumioplayGame[], platform: LumioplayPlatformId, query:
 function PlatformChips({
   active,
   onChange,
+  games,
 }: {
   active: LumioplayPlatformId
   onChange: (value: LumioplayPlatformId) => void
+  games: LumioplayGame[]
 }) {
+  const availablePlatformIds = Array.from(new Set(games.map((game) => game.platform)))
+  const availablePlatforms = LUMIOPLAY_PLATFORMS.filter(
+    (platform) => platform.id !== 'all' && availablePlatformIds.includes(platform.id),
+  )
+
+  if (availablePlatforms.length <= 1) return null
+
   return (
     <div className="flex flex-wrap gap-2">
-      {LUMIOPLAY_PLATFORMS.map((platform) => {
+      {availablePlatforms.map((platform) => {
         const selected = platform.id === active
         return (
           <button
@@ -69,8 +78,8 @@ function PlatformChips({
             onClick={() => onChange(platform.id)}
             className={`rounded-full px-3 py-1.5 text-xs uppercase tracking-[0.16em] transition ${
               selected
-                ? 'bg-white text-slate-950'
-                : 'border border-white/10 bg-white/5 text-slate-300 hover:border-white/25 hover:text-white'
+                ? 'bg-cyan-300 text-slate-950'
+                : 'border border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-300/30 hover:text-white'
             }`}
           >
             {platform.label}
@@ -99,14 +108,14 @@ function LibraryToolbar({
       <button
         type="button"
         onClick={onUploadRoms}
-        className="rounded-full bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-slate-200"
+        className="rounded-full bg-cyan-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-cyan-200"
       >
         {desktopReady ? 'Importera ROMs' : 'Ladda upp ROMs'}
       </button>
       <button
         type="button"
         onClick={onChooseFolder}
-        className="rounded-full border border-white/12 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-white/25 hover:bg-white/[0.08]"
+        className="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/30 hover:bg-slate-900"
       >
         Välj mapp
       </button>
@@ -114,7 +123,7 @@ function LibraryToolbar({
         <button
           type="button"
           onClick={onRescanFolders}
-          className="rounded-full border border-white/12 bg-white/[0.04] px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-white/25 hover:bg-white/[0.08]"
+          className="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/30 hover:bg-slate-900"
         >
           Skanna mappar
         </button>
@@ -145,11 +154,11 @@ function GamesGrid({
       {games.map((game) => (
         <div
           key={game.id}
-          className="group overflow-hidden rounded-[24px] border border-white/10 bg-[linear-gradient(180deg,rgba(30,41,59,0.96),rgba(12,18,34,0.98))] text-left transition hover:border-white/20 hover:bg-slate-900/80"
+          className="group overflow-hidden rounded-[24px] border border-slate-800 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(7,12,24,0.98))] text-left shadow-[0_12px_40px_rgba(2,6,23,0.45)] transition hover:border-cyan-300/25 hover:shadow-[0_18px_50px_rgba(34,211,238,0.08)]"
         >
-          <div className="aspect-[3/4] bg-[radial-gradient(circle_at_top,rgba(129,140,248,0.24),transparent_45%),linear-gradient(135deg,rgba(15,23,42,0.85),rgba(2,6,23,1))] p-3">
-            <div className="flex h-full flex-col justify-between rounded-[18px] border border-white/8 bg-black/10 p-3">
-              <span className="w-fit rounded-full border border-white/10 bg-white/6 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">
+          <div className="aspect-[3/4] bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_42%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,1))] p-3">
+            <div className="flex h-full flex-col justify-between rounded-[18px] bg-black/10 p-3">
+              <span className="w-fit rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">
                 {getPlatformLabel(game.platform)}
               </span>
               <div className="space-y-1">
@@ -173,8 +182,8 @@ function GamesGrid({
                 disabled={!canLaunchGame(game) || launchState.gameId === game.id}
                 className={`rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition ${
                   canLaunchGame(game)
-                    ? 'bg-indigo-400 text-slate-950 hover:bg-indigo-300'
-                    : 'cursor-not-allowed border border-white/10 bg-white/[0.04] text-slate-500'
+                    ? 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'
+                    : 'cursor-not-allowed border border-slate-700 bg-slate-900/70 text-slate-500'
                 }`}
               >
                 {launchState.gameId === game.id ? 'Startar...' : 'Spela'}
@@ -205,8 +214,13 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const folderInputRef = useRef<HTMLInputElement | null>(null)
   const desktopReady = isPluginDesktopHost()
   const savedFolders = getRomFolders()
+  const availablePlatformIds = Array.from(new Set(games.map((game) => game.platform)))
+  const resolvedPlatform =
+    platform !== 'all' && availablePlatformIds.includes(platform)
+      ? platform
+      : (availablePlatformIds[0] ?? 'all')
 
-  const filteredGames = sortGames(games, platform, query)
+  const filteredGames = sortGames(games, resolvedPlatform, query)
 
   function persistImportedGames(nextGames: LumioplayGame[], sourceLabel: string) {
     if (nextGames.length === 0) {
@@ -371,15 +385,11 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           value={query}
           onChange={(event) => setQuery(event.target.value)}
           placeholder="Sök spel"
-          className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-slate-500 outline-none"
+          className="h-11 w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-cyan-300/30"
         />
-        <PlatformChips active={platform} onChange={setPlatform} />
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-3 text-xs text-slate-400">
-          <span>{filteredGames.length} spel i vyn</span>
-          <span>Autodetektering: {IMPORTABLE_ROM_EXTENSIONS.join(', ')}</span>
-        </div>
+        <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
         {statusMessage ? (
-          <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/8 px-4 py-3 text-sm text-emerald-200">
+          <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
             {statusMessage}
           </div>
         ) : null}
@@ -426,7 +436,7 @@ export function LumioplayHomeRow(_props: HomeRowProps) {
       {recentGames.map((game) => (
         <div
           key={game.id}
-          className="rounded-2xl border border-white/10 bg-slate-900/60 p-4 text-sm text-slate-300"
+          className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-300"
         >
           <p className="line-clamp-2 font-medium text-white">{game.title}</p>
           <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">{getPlatformLabel(game.platform)}</p>
