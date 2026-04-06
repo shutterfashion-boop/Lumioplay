@@ -2,6 +2,47 @@
 
 Lumioplay is an external emulator plugin for Lumio, built around RetroArch + libretro cores.
 
+## Requirements
+
+Lumioplay requires RetroArch and at least one libretro core to launch games on desktop.
+
+### RetroArch
+
+Download and install RetroArch for your platform:
+
+- **macOS**: [https://buildbot.libretro.com/stable/](https://buildbot.libretro.com/stable/) — pick the latest macOS build, or install via Homebrew: `brew install retroarch`
+- **Windows**: [https://www.retroarch.com/index.php?page=platforms](https://www.retroarch.com/index.php?page=platforms) — download the Windows installer
+- **Linux**: Available via most package managers (`apt install retroarch`, `pacman -S retroarch`) or from the site above
+
+After installing, open RetroArch at least once so it creates its config folder.
+
+### Libretro cores
+
+Cores are emulation modules that handle specific consoles. The easiest way to install them is through RetroArch's built-in downloader:
+
+1. Open RetroArch
+2. Go to **Main Menu → Load Core → Download a Core**
+3. Install the core for each console you want:
+
+| Console | Recommended core |
+|---------|-----------------|
+| NES | `fceumm` or `nestopia` |
+| SNES | `snes9x` |
+| Game Boy / GBC | `gambatte` |
+| Game Boy Advance | `mgba` |
+| Mega Drive / Genesis | `genesis_plus_gx` |
+| Nintendo 64 | `mupen64plus_next` |
+| PlayStation 1 | `pcsx_rearmed` or `beetle_psx` |
+
+Cores are `.dylib` (macOS), `.dll` (Windows), or `.so` (Linux) files located inside the RetroArch cores folder (usually `~/Library/Application Support/RetroArch/cores` on macOS or `C:\RetroArch\cores` on Windows).
+
+### Setup in Lumioplay
+
+Once RetroArch and cores are installed, open Lumio → Lumioplay → Settings and point Lumioplay to:
+
+- **RetroArch path** — the RetroArch binary (e.g. `/Applications/RetroArch.app/Contents/MacOS/RetroArch`)
+- **Cores folder** — the folder containing your `.dylib`/`.dll`/`.so` core files
+
 ## Status
 
 The repo is now locally scaffolded and buildable.

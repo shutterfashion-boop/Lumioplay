@@ -40,10 +40,6 @@ const activePillClass =
   'border-accent-400/50 bg-accent-400/10 text-accent-300'
 const cardButtonClass =
   'flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all'
-const panelBorderColor = 'rgba(148, 163, 184, 0.14)'
-const panelBackground = 'linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(7, 12, 24, 0.98))'
-const cardShadow = '0 12px 40px rgba(2, 6, 23, 0.45)'
-const posterBackground = 'radial-gradient(circle at top, rgba(34, 211, 238, 0.16), transparent 42%), linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 1))'
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -242,34 +238,23 @@ function GamesGrid({
         return (
           <div
             key={game.id}
-            className={`group overflow-hidden rounded-[24px] border bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(7,12,24,0.98))] text-left shadow-[0_12px_40px_rgba(2,6,23,0.45)] transition ${
+            className={`group overflow-hidden rounded-2xl border text-left transition ${
               game.missing
-                ? 'border-rose-500/20 opacity-70'
-                : 'border-slate-800 hover:border-cyan-300/25 hover:shadow-[0_18px_50px_rgba(34,211,238,0.08)]'
+                ? 'border-rose-500/20 bg-white/[0.02] opacity-70'
+                : 'border-white/[0.06] bg-white/[0.03] hover:border-white/[0.10] hover:bg-white/[0.05]'
             }`}
-            style={{
-              borderColor: game.missing ? 'rgba(244, 63, 94, 0.2)' : panelBorderColor,
-              background: panelBackground,
-              boxShadow: cardShadow,
-              borderRadius: 24,
-            }}
           >
-            <div
-              className="relative aspect-[3/4]"
-              style={{
-                background: posterBackground,
-              }}
-            >
+            <div className="relative aspect-[3/4] bg-gradient-to-br from-slate-800 via-slate-700/60 to-slate-900">
               {game.coverUrl ? (
                 <img
                   src={game.coverUrl}
                   alt={getGameDisplayTitle(game)}
-                  className="h-full w-full object-cover"
+                  className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
                 />
               ) : null}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
               <div className="absolute left-3 right-3 top-3 flex items-start justify-between gap-2">
-                <span className="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">
+                <span className="rounded-full border border-white/[0.08] bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300 backdrop-blur-sm">
                   {getPlatformLabel(effectivePlatform)}
                 </span>
                 <StarButton active={Boolean(game.favorite)} onClick={() => onToggleFavorite(game.id)} />
@@ -302,7 +287,7 @@ function GamesGrid({
                   disabled={!canLaunchGame(game) || launchState.gameId === game.id}
                   className={`${cardButtonClass} ${
                     canLaunchGame(game)
-                      ? activePillClass
+                      ? 'border-accent-500/40 bg-accent-500/90 text-white hover:bg-accent-500'
                       : `cursor-not-allowed ${neutralPillClass} opacity-50`
                   }`}
                 >
@@ -627,11 +612,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
             value={query}
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Sök spel"
-            className="h-9 w-full max-w-xs rounded-full border border-white/10 bg-white/5 px-4 text-[0.8rem] text-white placeholder:text-slate-500 outline-none transition-all focus:border-accent-400/30 focus:bg-white/[0.07]"
-            style={{
-              borderColor: panelBorderColor,
-              backgroundColor: 'rgba(15, 23, 42, 0.46)',
-            }}
+            className="h-9 w-full max-w-xs rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-[0.8rem] text-white placeholder:text-slate-500 outline-none transition-all focus:border-accent-400/30 focus:bg-white/[0.07]"
           />
           <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
         </div>

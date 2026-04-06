@@ -98,6 +98,38 @@ export function LumioplaySettingsSection() {
         <h2 className="text-xl font-semibold text-white">Lumioplay</h2>
       </div>
 
+      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-sm text-slate-400">
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Vad behövs?</p>
+        <div className="mt-3 space-y-2">
+          <p>
+            Lumioplay kräver{' '}
+            <a
+              href="https://www.retroarch.com/index.php?page=platforms"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent-400 underline underline-offset-2 hover:text-accent-300"
+            >
+              RetroArch
+            </a>
+            {' '}och minst en libretro-core installerad på din dator.
+          </p>
+          <p>
+            Kärnor laddas enklast ner inifrån RetroArch via{' '}
+            <span className="text-slate-300">Main Menu → Load Core → Download a Core</span>.
+            Alternativt finns de på{' '}
+            <a
+              href="https://buildbot.libretro.com/stable/"
+              target="_blank"
+              rel="noreferrer"
+              className="text-accent-400 underline underline-offset-2 hover:text-accent-300"
+            >
+              buildbot.libretro.com
+            </a>
+            .
+          </p>
+        </div>
+      </div>
+
       <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
         <div className="flex flex-wrap items-center gap-3">
           <button type="button" onClick={applySuggestedDefaults} className={pillClass}>

@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.3.0
+
+- Updated game grid cards to match Lumio's visual theme — lighter borders, subtle translucent background, cleaner hover states
+- Play button now uses Lumio's solid accent colour instead of an outlined tint
+- Poster art scales slightly on hover, consistent with other Lumio grids
+- Added a requirements panel in settings with direct links to RetroArch and the libretro buildbot
+- Updated README with a full setup guide covering RetroArch download, core installation, and recommended cores per console
+
 ## 0.2.2
 
 - Fixed ROM folder scans from the Lumio desktop app by normalizing file payloads from the host bridge.
