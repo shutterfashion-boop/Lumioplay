@@ -60,6 +60,8 @@ Why this stack:
 - `docs/`: architecture notes and implementation plan
 - `runtime-host/`: local SDK shims for standalone plugin work
 - `scripts/build-runtime.mjs`: runtime bundler that outputs `dist/runtime.js`
+- `scripts/package-release.mjs`: creates a release ZIP that Lumio can import
+- `.github/workflows/release.yml`: builds and uploads a release ZIP asset on GitHub releases
 
 ## Current features
 
@@ -85,8 +87,22 @@ Notes:
 1. Run `npm install`
 2. Run `npm run typecheck`
 3. Run `npm run build`
+4. Run `npm run package:release` to create a Lumio-importable ZIP in `release/`
 
 The runtime bundle is generated at `dist/runtime.js`.
+
+## Distribution
+
+This repository is intended to be distributed as a GitHub release ZIP or as a manually uploaded ZIP in Lumio.
+
+Release ZIP contents:
+
+- `plugin.json`
+- `README.md`
+- `CHANGELOG.md`
+- `dist/runtime.js`
+
+The GitHub Actions release workflow builds that ZIP automatically when a GitHub release is published.
 
 ## Host integration
 
