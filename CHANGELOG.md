@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.0
+
+- Added a richer local library model with favorites, manual platform overrides, manual core overrides, and persisted metadata
+- Added background ROM-folder sync so saved folders stay updated without relying only on manual rescans
+- Added metadata enrichment from filenames plus libretro thumbnail cover lookups for supported systems
+- Added per-game customization controls directly in the library grid
+- Added RetroArch setup validation, auto-sync settings, and platform-aware default path suggestions
+
 ## 0.1.3
 
 - Removed the topbar and home-row integration so Lumioplay only appears in the main menu

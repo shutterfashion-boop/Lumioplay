@@ -10,14 +10,16 @@ Current state:
 
 - Lumio plugin manifest and runtime entry are in place
 - local ROM import works through browser file selection and desktop file picking
-- console auto-detection is implemented from file extensions
-- the library view has search, console chips, and a Lumio-style game grid
-- saved ROM folders can be scanned recursively in desktop mode
+- ROM folders can be kept in sync automatically while the library page is open in desktop mode
+- console auto-detection is implemented from file extensions, with manual per-game platform override
+- the library view has search, console chips, favorites, cover art lookups, and a Lumio-style game grid
+- per-game libretro core reassignment is available directly in the grid
 - RetroArch launch is wired for imported desktop ROMs when the Lumio host exposes the needed desktop bridge
-- RetroArch path, cores path, and ROM folders are stored in plugin-scoped storage
+- RetroArch path, cores path, ROM folders, and auto-sync preferences are stored in plugin-scoped storage
+- RetroArch setup can be validated and seeded with platform-aware defaults
 - a local build step outputs `dist/runtime.js`
 
-This is the first working launcher slice. What is still missing is richer library metadata, real folder watching, manual platform overrides, and a more polished launch/settings flow.
+This is now a fuller desktop launcher slice rather than only a scaffold. The main gaps are deeper metadata sources beyond filename enrichment, richer artwork fallback chains, and long-running desktop folder watching outside the open library view.
 
 ## Vision
 
@@ -67,19 +69,22 @@ Why this stack:
 
 - upload ROM files directly from the library page
 - import ROMs through the desktop file picker
-- choose a ROM folder from the library page
-- rescan saved ROM folders in desktop mode
+- choose one or more ROM folders from the library page
+- keep saved ROM folders in sync automatically while the library is open in desktop mode
 - auto-detect supported consoles from file extension
+- override console and libretro core per game
+- enrich library entries with parsed filename metadata and libretro thumbnail cover lookups
+- mark games as favorites and keep launch/play counters in local storage
 - browse imported games in a Lumio-style grid
 - filter with console chips and search
 - launch imported desktop ROMs through RetroArch
-- save RetroArch path, cores path, and ROM folder preferences locally
+- save RetroArch path, cores path, ROM folders, and auto-sync preferences locally
 
 Notes:
 
 - browser uploads are still useful for UI prototyping, but only desktop-imported ROMs have absolute file paths for launch
-- folder selection is native in desktop mode, but background watching is not built yet
-- artwork and metadata are still placeholders
+- auto-sync currently works as periodic folder re-indexing while the library page is mounted; native filesystem event watching can be layered on later
+- metadata is currently enriched from filenames and libretro thumbnail naming rather than a dedicated game database provider
 - the standalone repo uses a local SDK shim, but the intended production contract is Lumio core's plugin SDK
 
 ## Local development
@@ -121,8 +126,7 @@ That keeps emulator launching, file picking, and future desktop-only behavior be
 
 ## Next implementation steps
 
-1. Add folder watching / re-index sync instead of manual rescan only.
-2. Persist a richer local ROM library database with artwork, favorites, and platform overrides.
-3. Add manual console/core reassignment per game.
-4. Add metadata enrichment and cover art.
-5. Polish the RetroArch setup UX with validation and platform-specific defaults.
+1. Add optional native filesystem watching so folder changes are detected even when the library page is not open.
+2. Add a richer external metadata provider path for descriptions, alternate titles, and better artwork coverage.
+3. Expand supported systems and let users map multiple preferred cores per console.
+4. Add save-state and last-session resume hooks through RetroArch.

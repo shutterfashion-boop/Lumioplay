@@ -1,21 +1,30 @@
 'use client'
 
-import { useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   isPluginDesktopHost,
   pickPluginFiles,
   pickPluginFolder,
   scanPluginDirectory,
 } from '@/lib/plugin-sdk'
+import { getGameDisplayTitle, resolveFirstReachableCoverUrl } from './lumioplay-metadata'
 import {
   createImportedGame,
-  getRetroArchPath,
+  getAutoSyncEnabled,
+  getAutoSyncIntervalSeconds,
+  getEffectiveCoreId,
+  getEffectivePlatform,
+  getRomFolders,
   getStoredGames,
   IMPORTABLE_ROM_EXTENSIONS,
   LUMIOPLAY_PLATFORMS,
   markGameLaunched,
-  getRomFolders,
+  setGameCoreOverride,
+  setGameCover,
+  setGamePlatformOverride,
   setRomFolders,
+  syncFolderGames,
+  toggleFavorite,
   upsertImportedGames,
 } from './lumioplay-storage'
 import {
@@ -23,12 +32,14 @@ import {
   launchGameWithRetroArch,
 } from './lumioplay-launcher'
 import type { BrowsePageProps } from '@/lib/plugin-sdk'
-import type { LumioplayGame, LumioplayPlatformId } from './lumioplay-types'
+import type { LumioplayConsoleId, LumioplayGame, LumioplayPlatformId } from './lumioplay-types'
 
 const neutralPillClass =
   'border-white/10 bg-white/5 text-slate-200 hover:border-accent-400/30 hover:bg-white/10 hover:text-white'
 const activePillClass =
   'border-accent-400/50 bg-accent-400/10 text-accent-300'
+const cardButtonClass =
+  'flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all'
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -46,14 +57,39 @@ function getPlatformLabel(platform: LumioplayPlatformId): string {
   return LUMIOPLAY_PLATFORMS.find((entry) => entry.id === platform)?.label ?? platform.toUpperCase()
 }
 
+function getPlatformOptions(): LumioplayConsoleId[] {
+  return LUMIOPLAY_PLATFORMS
+    .filter((platform): platform is (typeof LUMIOPLAY_PLATFORMS)[number] & { id: LumioplayConsoleId } => platform.id !== 'all')
+    .map((platform) => platform.id)
+}
+
+function getCoreSuggestions(): string[] {
+  return Array.from(
+    new Set(
+      LUMIOPLAY_PLATFORMS
+        .map((platform) => platform.coreId)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  )
+}
+
 function sortGames(games: LumioplayGame[], platform: LumioplayPlatformId, query: string): LumioplayGame[] {
   const normalizedQuery = query.trim().toLowerCase()
-  return games.filter((game) => {
-    const matchesPlatform = platform === 'all' || game.platform === platform
-    const haystack = `${game.title} ${game.fileName}`.toLowerCase()
-    const matchesQuery = !normalizedQuery || haystack.includes(normalizedQuery)
-    return matchesPlatform && matchesQuery
-  })
+  return games
+    .filter((game) => {
+      const matchesPlatform = platform === 'all' || getEffectivePlatform(game) === platform
+      const haystack = `${getGameDisplayTitle(game)} ${game.fileName} ${game.metadata?.searchTitle ?? ''}`.toLowerCase()
+      const matchesQuery = !normalizedQuery || haystack.includes(normalizedQuery)
+      return matchesPlatform && matchesQuery
+    })
+    .sort((left, right) => {
+      if (!!left.favorite !== !!right.favorite) return left.favorite ? -1 : 1
+      if (!!left.missing !== !!right.missing) return left.missing ? 1 : -1
+      const leftPlayed = left.lastPlayedAt ?? ''
+      const rightPlayed = right.lastPlayedAt ?? ''
+      if (leftPlayed !== rightPlayed) return rightPlayed.localeCompare(leftPlayed)
+      return getGameDisplayTitle(left).localeCompare(getGameDisplayTitle(right), 'sv')
+    })
 }
 
 function PlatformChips({
@@ -65,10 +101,12 @@ function PlatformChips({
   onChange: (value: LumioplayPlatformId) => void
   games: LumioplayGame[]
 }) {
-  const availablePlatformIds = Array.from(new Set(games.map((game) => game.platform)))
+  const availablePlatformIds = Array.from(new Set(games.map((game) => getEffectivePlatform(game))))
   const availablePlatforms = LUMIOPLAY_PLATFORMS.filter(
     (platform) => platform.id !== 'all' && availablePlatformIds.includes(platform.id),
   )
+
+  if (availablePlatforms.length === 0) return null
 
   return (
     <div className="flex flex-wrap gap-2">
@@ -99,26 +137,28 @@ function LibraryToolbar({
   onRescanFolders,
   desktopReady,
   hasSavedFolders,
+  syncing,
 }: {
   onUploadRoms: () => void
   onChooseFolder: () => void
   onRescanFolders: () => void
   desktopReady: boolean
   hasSavedFolders: boolean
+  syncing: boolean
 }) {
   return (
     <div className="flex flex-wrap gap-3">
       <button
         type="button"
         onClick={onUploadRoms}
-        className={`flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${activePillClass}`}
+        className={`${cardButtonClass} ${activePillClass}`}
       >
         {desktopReady ? 'Importera ROMs' : 'Ladda upp ROMs'}
       </button>
       <button
         type="button"
         onClick={onChooseFolder}
-        className={`flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${neutralPillClass}`}
+        className={`${cardButtonClass} ${neutralPillClass}`}
       >
         Välj mapp
       </button>
@@ -126,24 +166,60 @@ function LibraryToolbar({
         <button
           type="button"
           onClick={onRescanFolders}
-          className={`flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${neutralPillClass}`}
+          className={`${cardButtonClass} ${syncing ? activePillClass : neutralPillClass}`}
         >
-          Skanna mappar
+          {syncing ? 'Synkar...' : 'Synka nu'}
         </button>
       ) : null}
     </div>
   )
 }
 
+function StarButton({
+  active,
+  onClick,
+}: {
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex h-8 w-8 items-center justify-center rounded-full border text-sm transition-all ${
+        active
+          ? 'border-accent-400/50 bg-accent-400/10 text-accent-300'
+          : 'border-white/10 bg-black/25 text-slate-400 hover:border-white/20 hover:text-white'
+      }`}
+      aria-label={active ? 'Ta bort favorit' : 'Markera som favorit'}
+    >
+      ★
+    </button>
+  )
+}
+
 function GamesGrid({
   games,
   launchState,
+  editingGameId,
+  onEditGame,
+  onToggleFavorite,
   onLaunch,
+  onPlatformOverrideChange,
+  onCoreOverrideChange,
 }: {
   games: LumioplayGame[]
   launchState: { gameId: string | null; message: string | null }
+  editingGameId: string | null
+  onEditGame: (gameId: string | null) => void
+  onToggleFavorite: (gameId: string) => void
   onLaunch: (game: LumioplayGame) => void
+  onPlatformOverrideChange: (gameId: string, platform: LumioplayConsoleId | null) => void
+  onCoreOverrideChange: (gameId: string, coreId: string | null) => void
 }) {
+  const platformOptions = getPlatformOptions()
+  const coreSuggestions = getCoreSuggestions()
+
   if (games.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-sm text-slate-400">
@@ -154,52 +230,129 @@ function GamesGrid({
 
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
-      {games.map((game) => (
-        <div
-          key={game.id}
-          className="group overflow-hidden rounded-[24px] border border-slate-800 bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(7,12,24,0.98))] text-left shadow-[0_12px_40px_rgba(2,6,23,0.45)] transition hover:border-cyan-300/25 hover:shadow-[0_18px_50px_rgba(34,211,238,0.08)]"
-        >
-          <div className="aspect-[3/4] bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_42%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,1))] p-3">
-            <div className="flex h-full flex-col justify-between rounded-[18px] bg-black/10 p-3">
-              <span className="w-fit rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">
-                {getPlatformLabel(game.platform)}
-              </span>
-              <div className="space-y-1">
-                <p className="line-clamp-3 text-base font-semibold text-white">{game.title}</p>
-                <p className="line-clamp-1 text-xs text-slate-400">{game.fileName}</p>
+      {games.map((game) => {
+        const effectivePlatform = getEffectivePlatform(game)
+        const effectiveCore = getEffectiveCoreId(game)
+        const editing = editingGameId === game.id
+
+        return (
+          <div
+            key={game.id}
+            className={`group overflow-hidden rounded-[24px] border bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(7,12,24,0.98))] text-left shadow-[0_12px_40px_rgba(2,6,23,0.45)] transition ${
+              game.missing
+                ? 'border-rose-500/20 opacity-70'
+                : 'border-slate-800 hover:border-cyan-300/25 hover:shadow-[0_18px_50px_rgba(34,211,238,0.08)]'
+            }`}
+          >
+            <div className="relative aspect-[3/4] bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_42%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,1))]">
+              {game.coverUrl ? (
+                <img
+                  src={game.coverUrl}
+                  alt={getGameDisplayTitle(game)}
+                  className="h-full w-full object-cover"
+                />
+              ) : null}
+              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/25 to-transparent" />
+              <div className="absolute left-3 right-3 top-3 flex items-start justify-between gap-2">
+                <span className="rounded-full border border-slate-700 bg-slate-950/80 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">
+                  {getPlatformLabel(effectivePlatform)}
+                </span>
+                <StarButton active={Boolean(game.favorite)} onClick={() => onToggleFavorite(game.id)} />
+              </div>
+              <div className="absolute bottom-0 left-0 right-0 space-y-1 p-3">
+                <p className="line-clamp-3 text-base font-semibold text-white">{getGameDisplayTitle(game)}</p>
+                <p className="line-clamp-1 text-xs text-slate-300/80">{game.fileName}</p>
+                <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-slate-400">
+                  {game.metadata?.releaseYear ? <span>{game.metadata.releaseYear}</span> : null}
+                  {game.metadata?.region ? <span>{game.metadata.region}</span> : null}
+                  {game.missing ? <span className="text-rose-300">Saknas lokalt</span> : null}
+                </div>
               </div>
             </div>
-          </div>
-          <div className="space-y-2 p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="text-[10px] uppercase tracking-[0.16em] text-slate-400">{game.coreId ?? 'Ingen core'}</p>
-              <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                {game.source === 'folder' ? 'Mapp' : 'Upload'}
-              </span>
-            </div>
-            <p className="line-clamp-1 text-xs text-slate-500">{formatFileSize(game.fileSizeBytes) ?? game.extension}</p>
-            <div className="flex items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => onLaunch(game)}
-                disabled={!canLaunchGame(game) || launchState.gameId === game.id}
-                className={`flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${
-                  canLaunchGame(game)
-                    ? activePillClass
-                    : `cursor-not-allowed ${neutralPillClass} opacity-50`
-                }`}
-              >
-                {launchState.gameId === game.id ? 'Startar...' : 'Spela'}
-              </button>
-              {!canLaunchGame(game) ? (
-                <span className="text-[10px] text-slate-500">
-                  {isPluginDesktopHost() ? 'Importera via desktop picker' : 'Desktop krävs'}
+            <div className="space-y-3 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-[10px] uppercase tracking-[0.16em] text-slate-400">{effectiveCore ?? 'Ingen core'}</p>
+                <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                  {game.source === 'folder' ? 'Mapp' : 'Upload'}
                 </span>
+              </div>
+              <p className="line-clamp-2 text-xs text-slate-500">
+                {formatFileSize(game.fileSizeBytes) ?? game.extension}
+                {game.playCount ? ` · ${game.playCount} spelningar` : ''}
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onLaunch(game)}
+                  disabled={!canLaunchGame(game) || launchState.gameId === game.id}
+                  className={`${cardButtonClass} ${
+                    canLaunchGame(game)
+                      ? activePillClass
+                      : `cursor-not-allowed ${neutralPillClass} opacity-50`
+                  }`}
+                >
+                  {launchState.gameId === game.id ? 'Startar...' : 'Spela'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onEditGame(editing ? null : game.id)}
+                  className={`${cardButtonClass} ${neutralPillClass}`}
+                >
+                  {editing ? 'Klar' : 'Anpassa'}
+                </button>
+              </div>
+              {!canLaunchGame(game) ? (
+                <p className="text-[11px] text-slate-500">
+                  {game.missing
+                    ? 'ROM-filen kunde inte hittas vid senaste synken.'
+                    : isPluginDesktopHost()
+                      ? 'Importera via desktop picker eller välj en lokal mapp.'
+                      : 'Desktop krävs för att starta spel.'}
+                </p>
+              ) : null}
+              {editing ? (
+                <div className="space-y-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Konsol</label>
+                    <select
+                      value={game.platformOverride ?? ''}
+                      onChange={(event) =>
+                        onPlatformOverrideChange(
+                          game.id,
+                          event.target.value ? (event.target.value as LumioplayConsoleId) : null,
+                        )
+                      }
+                      className="h-10 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-3 text-sm text-white outline-none"
+                    >
+                      <option value="">Autodetektering ({getPlatformLabel(game.platform)})</option>
+                      {platformOptions.map((platform) => (
+                        <option key={platform} value={platform}>
+                          {getPlatformLabel(platform)}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Libretro-core</label>
+                    <input
+                      list={`core-suggestions-${game.id}`}
+                      value={game.coreOverride ?? ''}
+                      onChange={(event) => onCoreOverrideChange(game.id, event.target.value || null)}
+                      placeholder={effectiveCore ?? 'Ange core-id'}
+                      className="h-10 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-3 text-sm text-white placeholder:text-slate-500 outline-none"
+                    />
+                    <datalist id={`core-suggestions-${game.id}`}>
+                      {coreSuggestions.map((coreId) => (
+                        <option key={coreId} value={coreId} />
+                      ))}
+                    </datalist>
+                  </div>
+                </div>
               ) : null}
             </div>
           </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }
@@ -213,17 +366,26 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     gameId: null,
     message: null,
   })
+  const [editingGameId, setEditingGameId] = useState<string | null>(null)
+  const [syncing, setSyncing] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
+  const syncInFlightRef = useRef(false)
   const desktopReady = isPluginDesktopHost()
   const savedFolders = getRomFolders()
-  const availablePlatformIds = Array.from(new Set(games.map((game) => game.platform)))
+  const autoSyncEnabled = getAutoSyncEnabled()
+  const autoSyncIntervalSeconds = getAutoSyncIntervalSeconds()
+  const availablePlatformIds = Array.from(new Set(games.map((game) => getEffectivePlatform(game))))
   const resolvedPlatform =
-    platform !== 'all' && availablePlatformIds.includes(platform)
+    platform !== 'all' && availablePlatformIds.includes(platform as LumioplayConsoleId)
       ? platform
       : (availablePlatformIds[0] ?? 'all')
 
-  const filteredGames = sortGames(games, resolvedPlatform, query)
+  const filteredGames = useMemo(() => sortGames(games, resolvedPlatform, query), [games, resolvedPlatform, query])
+
+  function refreshGames() {
+    setGames(getStoredGames())
+  }
 
   function persistImportedGames(nextGames: LumioplayGame[], sourceLabel: string) {
     if (nextGames.length === 0) {
@@ -251,48 +413,58 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           fileName: file.fileName,
           romPath: file.path,
           source: 'folder',
+          sourceFolder: directory,
           fileSizeBytes: file.sizeBytes ?? null,
         }),
       )
       .filter((game): game is LumioplayGame => Boolean(game))
 
-    persistImportedGames(importedGames, directory)
+    const merged = syncFolderGames(directory, importedGames)
+    setGames(merged)
+    setStatusMessage(`${importedGames.length} spel synkades från ${directory}.`)
   }
 
-  async function handleRescanFolders() {
-    if (!savedFolders.length) {
-      setStatusMessage('Inga sparade ROM-mappar att skanna ännu.')
-      return
-    }
+  async function syncSavedFolders(silent = false) {
+    if (!desktopReady || !savedFolders.length || syncInFlightRef.current) return
+    syncInFlightRef.current = true
+    setSyncing(true)
+    let totalFound = 0
 
-    let totalImported = 0
-    for (const folder of savedFolders) {
-      const indexedFiles = await scanPluginDirectory(
-        folder,
-        IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')),
-      )
-      const importedGames = (indexedFiles ?? [])
-        .map((file) =>
-          createImportedGame({
-            fileName: file.fileName,
-            romPath: file.path,
-            source: 'folder',
-            fileSizeBytes: file.sizeBytes ?? null,
-          }),
+    try {
+      for (const folder of savedFolders) {
+        const indexedFiles = await scanPluginDirectory(
+          folder,
+          IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')),
         )
-        .filter((game): game is LumioplayGame => Boolean(game))
-      totalImported += importedGames.length
-      if (importedGames.length > 0) {
-        const merged = upsertImportedGames(importedGames)
-        setGames(merged)
-      }
-    }
 
-    setStatusMessage(
-      totalImported > 0
-        ? `${totalImported} spel hittades i sparade ROM-mappar.`
-        : 'Inga stödda ROM-filer hittades i sparade ROM-mappar.',
-    )
+        const importedGames = (indexedFiles ?? [])
+          .map((file) =>
+            createImportedGame({
+              fileName: file.fileName,
+              romPath: file.path,
+              source: 'folder',
+              sourceFolder: folder,
+              fileSizeBytes: file.sizeBytes ?? null,
+            }),
+          )
+          .filter((game): game is LumioplayGame => Boolean(game))
+
+        totalFound += importedGames.length
+        syncFolderGames(folder, importedGames)
+      }
+
+      refreshGames()
+      if (!silent) {
+        setStatusMessage(
+          totalFound > 0
+            ? `${totalFound} spel synkades från sparade ROM-mappar.`
+            : 'Inga stödda ROM-filer hittades i sparade ROM-mappar.',
+        )
+      }
+    } finally {
+      syncInFlightRef.current = false
+      setSyncing(false)
+    }
   }
 
   async function handleNativeImport() {
@@ -330,6 +502,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           fileName: file.name,
           romPath: source === 'folder' ? file.webkitRelativePath || file.name : file.name,
           source,
+          sourceFolder: source === 'folder'
+            ? (file.webkitRelativePath.includes('/') ? file.webkitRelativePath.split('/')[0] : 'vald mapp')
+            : null,
           fileSizeBytes: file.size,
         }),
       )
@@ -340,13 +515,10 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   async function handleLaunch(game: LumioplayGame) {
     setLaunchState({ gameId: game.id, message: null })
     try {
-      if (!getRetroArchPath().trim()) {
-        throw new Error('Lägg in RetroArch-sökväg i inställningarna först.')
-      }
       await launchGameWithRetroArch(game)
       const updated = markGameLaunched(game.id)
       setGames(updated)
-      setStatusMessage(`Startade ${game.title} i RetroArch.`)
+      setStatusMessage(`Startade ${getGameDisplayTitle(game)} i RetroArch.`)
     } catch (error) {
       const message = error instanceof Error ? error.message : 'RetroArch kunde inte startas.'
       setLaunchState({ gameId: null, message })
@@ -355,6 +527,56 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     }
     setLaunchState({ gameId: null, message: null })
   }
+
+  useEffect(() => {
+    if (!desktopReady || !autoSyncEnabled || savedFolders.length === 0) return
+
+    void syncSavedFolders(true)
+
+    const intervalId = window.setInterval(() => {
+      void syncSavedFolders(true)
+    }, autoSyncIntervalSeconds * 1000)
+
+    const handleFocus = () => {
+      refreshGames()
+      void syncSavedFolders(true)
+    }
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') {
+        refreshGames()
+        void syncSavedFolders(true)
+      }
+    }
+
+    window.addEventListener('focus', handleFocus)
+    document.addEventListener('visibilitychange', handleVisibility)
+    return () => {
+      window.clearInterval(intervalId)
+      window.removeEventListener('focus', handleFocus)
+      document.removeEventListener('visibilitychange', handleVisibility)
+    }
+  }, [desktopReady, autoSyncEnabled, autoSyncIntervalSeconds, savedFolders.join('|')])
+
+  useEffect(() => {
+    let cancelled = false
+    const gamesNeedingCover = games.filter(
+      (game) => game.artworkStatus !== 'missing' && !game.coverUrl && game.metadata?.coverCandidates?.length,
+    )
+    if (gamesNeedingCover.length === 0) return
+
+    void (async () => {
+      for (const game of gamesNeedingCover.slice(0, 12)) {
+        const resolvedCover = await resolveFirstReachableCoverUrl(game.metadata?.coverCandidates ?? [])
+        if (cancelled) return
+        setGameCover(game.id, resolvedCover)
+        refreshGames()
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [games])
 
   return (
     <div className="space-y-5">
@@ -379,10 +601,11 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
             folderInputRef.current?.click()
           }}
           onRescanFolders={() => {
-            void handleRescanFolders()
+            void syncSavedFolders(false)
           }}
           desktopReady={desktopReady}
           hasSavedFolders={savedFolders.length > 0}
+          syncing={syncing}
         />
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -394,8 +617,24 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
         </div>
         {statusMessage ? <p className="text-sm text-slate-400">{statusMessage}</p> : null}
+        {launchState.message ? <p className="text-sm text-rose-300">{launchState.message}</p> : null}
       </div>
-      <GamesGrid games={filteredGames} launchState={launchState} onLaunch={(game) => void handleLaunch(game)} />
+      <GamesGrid
+        games={filteredGames}
+        launchState={launchState}
+        editingGameId={editingGameId}
+        onEditGame={setEditingGameId}
+        onToggleFavorite={(gameId) => {
+          setGames(toggleFavorite(gameId))
+        }}
+        onLaunch={(game) => void handleLaunch(game)}
+        onPlatformOverrideChange={(gameId, nextPlatform) => {
+          setGames(setGamePlatformOverride(gameId, nextPlatform))
+        }}
+        onCoreOverrideChange={(gameId, nextCoreId) => {
+          setGames(setGameCoreOverride(gameId, nextCoreId))
+        }}
+      />
       <input
         ref={uploadInputRef}
         type="file"
