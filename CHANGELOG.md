@@ -11,4 +11,4 @@
 - Added plugin-scoped settings for RetroArch path, cores path, and ROM folders
 - Added desktop ROM import and recursive ROM-folder scanning
 - Added RetroArch launch flow for desktop-imported ROMs
-- Updated docs for Lumio core SDK host helpers and current launcher status
+- Updated docs for Lumio host integration and current launcher status

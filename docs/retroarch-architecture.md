@@ -52,7 +52,7 @@ Desktop-only launch path:
 - verify core path for selected platform
 - build command:
   - `retroarch -L <core-path> <rom-path>`
-- launch through Lumio core's plugin host helpers, not direct Tauri imports inside the plugin
+- launch through Lumio's plugin host bridge, not direct app-internal imports inside the plugin
 
 Preferred host contract:
 
@@ -108,7 +108,7 @@ Already implemented:
 - recursive folder scanning for saved ROM directories
 - searchable grid browser with console chips
 - plugin-scoped storage for games, ROM folders, and RetroArch path
-- RetroArch launch through the host SDK using `retroarch -L <core> <rom>`
+- RetroArch launch through the host bridge using `retroarch -L <core> <rom>`
 
 Still missing:
 

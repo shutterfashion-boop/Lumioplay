@@ -1,6 +1,6 @@
 # Lumioplay
 
-Lumioplay is a Lumio emulator plugin built around RetroArch + libretro cores.
+Lumioplay is an external emulator plugin for Lumio, built around RetroArch + libretro cores.
 
 ## Status
 
@@ -13,11 +13,11 @@ Current state:
 - console auto-detection is implemented from file extensions
 - the library view has search, console chips, and a Lumio-style game grid
 - saved ROM folders can be scanned recursively in desktop mode
-- RetroArch launch is wired through the host SDK for imported desktop ROMs
+- RetroArch launch is wired for imported desktop ROMs when the Lumio host exposes the needed desktop bridge
 - RetroArch path, cores path, and ROM folders are stored in plugin-scoped storage
 - a local build step outputs `dist/runtime.js`
 
-This is now the first working launcher slice. What is still missing is richer library metadata, real folder watching, manual platform overrides, and a more polished launch/settings flow.
+This is the first working launcher slice. What is still missing is richer library metadata, real folder watching, manual platform overrides, and a more polished launch/settings flow.
 
 ## Vision
 
@@ -39,7 +39,7 @@ Why this stack:
 
 - one launcher path for many systems
 - mature controller and save-state support
-- well-suited to a Tauri desktop host
+- well-suited to a desktop Lumio host
 - easy to model as `console -> core -> rom`
 
 ## Planned first systems
@@ -88,11 +88,11 @@ Notes:
 
 The runtime bundle is generated at `dist/runtime.js`.
 
-## Core SDK alignment
+## Host integration
 
-Lumioplay is intended to use Lumio's plugin SDK host helpers for desktop-specific behavior instead of importing Tauri APIs directly inside plugin code.
+Lumioplay is designed to stay on the plugin side of the boundary and use whatever desktop helpers the Lumio host exposes for plugins.
 
-Target helpers in core:
+Expected host capabilities:
 
 - `isPluginDesktopHost()`
 - `pickPluginFolder()`
@@ -101,7 +101,7 @@ Target helpers in core:
 - `executePluginDesktopCommand(...)`
 - `spawnPluginDesktopCommand(...)`
 
-That keeps emulator launching, file picking, and future desktop-only behavior behind a stable plugin-facing API.
+That keeps emulator launching, file picking, and future desktop-only behavior behind a stable host API instead of hard-coupling the plugin to app internals.
 
 ## Next implementation steps
 
