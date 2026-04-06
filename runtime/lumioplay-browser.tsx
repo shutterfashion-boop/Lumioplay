@@ -22,8 +22,13 @@ import {
   canLaunchGame,
   launchGameWithRetroArch,
 } from './lumioplay-launcher'
-import type { BrowsePageProps, HomeRowProps } from '@/lib/plugin-sdk'
+import type { BrowsePageProps } from '@/lib/plugin-sdk'
 import type { LumioplayGame, LumioplayPlatformId } from './lumioplay-types'
+
+const neutralPillClass =
+  'border-white/10 bg-white/5 text-slate-200 hover:border-accent-400/30 hover:bg-white/10 hover:text-white'
+const activePillClass =
+  'border-accent-400/50 bg-accent-400/10 text-accent-300'
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -65,8 +70,6 @@ function PlatformChips({
     (platform) => platform.id !== 'all' && availablePlatformIds.includes(platform.id),
   )
 
-  if (availablePlatforms.length <= 1) return null
-
   return (
     <div className="flex flex-wrap gap-2">
       {availablePlatforms.map((platform) => {
@@ -76,10 +79,10 @@ function PlatformChips({
             key={platform.id}
             type="button"
             onClick={() => onChange(platform.id)}
-            className={`rounded-full px-3 py-1.5 text-xs uppercase tracking-[0.16em] transition ${
+            className={`h-9 rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] whitespace-nowrap transition-all ${
               selected
-                ? 'bg-cyan-300 text-slate-950'
-                : 'border border-slate-700 bg-slate-900/70 text-slate-300 hover:border-cyan-300/30 hover:text-white'
+                ? activePillClass
+                : neutralPillClass
             }`}
           >
             {platform.label}
@@ -108,14 +111,14 @@ function LibraryToolbar({
       <button
         type="button"
         onClick={onUploadRoms}
-        className="rounded-full bg-cyan-300 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-950 transition hover:bg-cyan-200"
+        className={`flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${activePillClass}`}
       >
         {desktopReady ? 'Importera ROMs' : 'Ladda upp ROMs'}
       </button>
       <button
         type="button"
         onClick={onChooseFolder}
-        className="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/30 hover:bg-slate-900"
+        className={`flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${neutralPillClass}`}
       >
         Välj mapp
       </button>
@@ -123,7 +126,7 @@ function LibraryToolbar({
         <button
           type="button"
           onClick={onRescanFolders}
-          className="rounded-full border border-slate-700 bg-slate-900/70 px-4 py-2 text-xs font-semibold uppercase tracking-[0.18em] text-white transition hover:border-cyan-300/30 hover:bg-slate-900"
+          className={`flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${neutralPillClass}`}
         >
           Skanna mappar
         </button>
@@ -180,10 +183,10 @@ function GamesGrid({
                 type="button"
                 onClick={() => onLaunch(game)}
                 disabled={!canLaunchGame(game) || launchState.gameId === game.id}
-                className={`rounded-full px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] transition ${
+                className={`flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${
                   canLaunchGame(game)
-                    ? 'bg-cyan-300 text-slate-950 hover:bg-cyan-200'
-                    : 'cursor-not-allowed border border-slate-700 bg-slate-900/70 text-slate-500'
+                    ? activePillClass
+                    : `cursor-not-allowed ${neutralPillClass} opacity-50`
                 }`}
               >
                 {launchState.gameId === game.id ? 'Startar...' : 'Spela'}
@@ -381,18 +384,16 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           desktopReady={desktopReady}
           hasSavedFolders={savedFolders.length > 0}
         />
-        <input
-          value={query}
-          onChange={(event) => setQuery(event.target.value)}
-          placeholder="Sök spel"
-          className="h-11 w-full rounded-2xl border border-slate-800 bg-slate-950/70 px-4 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-cyan-300/30"
-        />
-        <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
-        {statusMessage ? (
-          <div className="rounded-2xl border border-emerald-500/15 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
-            {statusMessage}
-          </div>
-        ) : null}
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Sök spel"
+            className="h-9 w-full max-w-xs rounded-full border border-white/10 bg-white/5 px-4 text-[0.8rem] text-white placeholder:text-slate-500 outline-none transition-all focus:border-accent-400/30 focus:bg-white/[0.07]"
+          />
+          <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
+        </div>
+        {statusMessage ? <p className="text-sm text-slate-400">{statusMessage}</p> : null}
       </div>
       <GamesGrid games={filteredGames} launchState={launchState} onLaunch={(game) => void handleLaunch(game)} />
       <input
@@ -411,37 +412,6 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
         onChange={(event) => handleFilesSelected(event.target.files, 'folder')}
         {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
       />
-    </div>
-  )
-}
-
-export function LumioplayHomeRow(_props: HomeRowProps) {
-  const recentGames = getStoredGames()
-    .slice()
-    .sort((left, right) =>
-      (right.lastPlayedAt ?? right.importedAt ?? '').localeCompare(left.lastPlayedAt ?? left.importedAt ?? ''),
-    )
-    .slice(0, 6)
-
-  if (recentGames.length === 0) {
-    return (
-      <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-5 text-sm text-slate-400">
-        Lumioplay kommer att visa senaste spel här när ROM-biblioteket är indexerat.
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-      {recentGames.map((game) => (
-        <div
-          key={game.id}
-          className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-sm text-slate-300"
-        >
-          <p className="line-clamp-2 font-medium text-white">{game.title}</p>
-          <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-slate-500">{getPlatformLabel(game.platform)}</p>
-        </div>
-      ))}
     </div>
   )
 }

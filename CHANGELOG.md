@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3
+
+- Removed the topbar and home-row integration so Lumioplay only appears in the main menu
+- Aligned browse-page pills and action buttons with Lumio's existing filter and menu styling
+- Moved search to a smaller inline field next to the platform chips
+- Reduced import and launch status messages to lightweight inline text
+- Only show platform chips for consoles that actually exist in the current library
+
 ## 0.1.0
 
 - Initial Lumioplay plugin scaffold

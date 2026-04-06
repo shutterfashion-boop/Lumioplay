@@ -2,7 +2,7 @@
   "id": "com.lumio.lumioplay",
   "slug": "lumioplay",
   "name": "Lumioplay",
-  "version": "0.1.0",
+  "version": "0.1.3",
   "description": "Browse local ROMs and launch retro games through RetroArch and libretro cores.",
   "runtimeBundlePath": "dist/runtime.js",
   "official": false,
@@ -11,9 +11,6 @@
   "sdkCapabilities": [
     "settings-section",
     "browse-pages",
-    "main-menu",
-    "topbar-item",
-    "home-rows"
+    "main-menu"
   ]
 }
-
