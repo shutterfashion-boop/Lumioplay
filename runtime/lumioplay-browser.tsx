@@ -135,16 +135,20 @@ function LibraryToolbar({
   onUploadRoms,
   onChooseFolder,
   onRescanFolders,
+  onSyncPosters,
   desktopReady,
   hasSavedFolders,
   syncing,
+  syncingPosters,
 }: {
   onUploadRoms: () => void
   onChooseFolder: () => void
   onRescanFolders: () => void
+  onSyncPosters: () => void
   desktopReady: boolean
   hasSavedFolders: boolean
   syncing: boolean
+  syncingPosters: boolean
 }) {
   return (
     <div className="flex flex-wrap gap-3">
@@ -171,6 +175,14 @@ function LibraryToolbar({
           {syncing ? 'Synkar...' : 'Synka nu'}
         </button>
       ) : null}
+      <button
+        type="button"
+        onClick={onSyncPosters}
+        disabled={syncingPosters}
+        className={`${cardButtonClass} ${syncingPosters ? activePillClass : neutralPillClass}`}
+      >
+        {syncingPosters ? 'Hämtar posters...' : 'Synka posters'}
+      </button>
     </div>
   )
 }
@@ -238,7 +250,7 @@ function GamesGrid({
         return (
           <div
             key={game.id}
-            className={`group w-full cursor-pointer overflow-hidden bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${game.missing ? 'opacity-70' : ''}`}
+            className={`group w-full cursor-pointer bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${game.missing ? 'opacity-70' : ''}`}
           >
             <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
               {game.coverUrl ? (
@@ -551,26 +563,36 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     }
   }, [desktopReady, autoSyncEnabled, autoSyncIntervalSeconds, savedFolders.join('|')])
 
-  useEffect(() => {
-    let cancelled = false
-    const gamesNeedingCover = games.filter(
-      (game) => game.artworkStatus !== 'missing' && !game.coverUrl && game.metadata?.coverCandidates?.length,
+  const [syncingPosters, setSyncingPosters] = useState(false)
+  const posterSyncCancelRef = useRef(false)
+
+  async function syncAllPosters(force = false) {
+    if (syncingPosters) return
+    const gamesNeedingCover = getStoredGames().filter(
+      (game) => (force || (game.artworkStatus !== 'missing' && !game.coverUrl)) && game.metadata?.coverCandidates?.length,
     )
     if (gamesNeedingCover.length === 0) return
-
-    void (async () => {
-      for (const game of gamesNeedingCover.slice(0, 12)) {
+    posterSyncCancelRef.current = false
+    setSyncingPosters(true)
+    try {
+      for (const game of gamesNeedingCover) {
+        if (posterSyncCancelRef.current) break
         const resolvedCover = await resolveFirstReachableCoverUrl(game.metadata?.coverCandidates ?? [])
-        if (cancelled) return
         setGameCover(game.id, resolvedCover)
         refreshGames()
       }
-    })()
-
-    return () => {
-      cancelled = true
+    } finally {
+      setSyncingPosters(false)
     }
-  }, [games])
+  }
+
+  useEffect(() => {
+    void syncAllPosters(false)
+    return () => {
+      posterSyncCancelRef.current = true
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   return (
     <div className="space-y-5">
@@ -597,9 +619,11 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           onRescanFolders={() => {
             void syncSavedFolders(false)
           }}
+          onSyncPosters={() => void syncAllPosters(true)}
           desktopReady={desktopReady}
           hasSavedFolders={savedFolders.length > 0}
           syncing={syncing}
+          syncingPosters={syncingPosters}
         />
         <div className="flex flex-wrap items-center gap-3">
           <input

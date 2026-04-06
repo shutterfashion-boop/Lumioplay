@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.3
+
+- Fixed card border-radius: removed conflicting `overflow-hidden` from outer wrapper so poster corners render correctly
+- Poster auto-sync now fetches all games on load, not just the first 12
+- Added "Synka posters" button to manually trigger a full poster refresh for the whole library
+
 ## 0.3.2
 
 - Fixed desktop detection: `isPluginDesktopHost()` now evaluates after mount so the SDK bridge is guaranteed to be ready, fixing "Desktop krävs" showing incorrectly and the missing sync button
