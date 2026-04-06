@@ -238,49 +238,41 @@ function GamesGrid({
         return (
           <div
             key={game.id}
-            className={`group overflow-hidden rounded-2xl border text-left transition ${
-              game.missing
-                ? 'border-rose-500/20 bg-white/[0.02] opacity-70'
-                : 'border-white/[0.06] bg-white/[0.03] hover:border-white/[0.10] hover:bg-white/[0.05]'
-            }`}
+            className={`group w-full cursor-pointer overflow-hidden bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${game.missing ? 'opacity-70' : ''}`}
           >
-            <div className="relative aspect-[3/4] bg-gradient-to-br from-slate-800 via-slate-700/60 to-slate-900">
+            <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
               {game.coverUrl ? (
                 <img
                   src={game.coverUrl}
                   alt={getGameDisplayTitle(game)}
-                  className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.03]"
+                  className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
                 />
               ) : null}
-              <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
-              <div className="absolute left-3 right-3 top-3 flex items-start justify-between gap-2">
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
+              <div className="absolute left-2 right-2 top-2 flex items-start justify-between gap-2">
                 <span className="rounded-full border border-white/[0.08] bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300 backdrop-blur-sm">
                   {getPlatformLabel(effectivePlatform)}
                 </span>
                 <StarButton active={Boolean(game.favorite)} onClick={() => onToggleFavorite(game.id)} />
               </div>
-              <div className="absolute bottom-0 left-0 right-0 space-y-1 p-3">
-                <p className="line-clamp-3 text-base font-semibold text-white">{getGameDisplayTitle(game)}</p>
-                <p className="line-clamp-1 text-xs text-slate-300/80">{game.fileName}</p>
-                <div className="flex flex-wrap items-center gap-2 text-[10px] uppercase tracking-[0.16em] text-slate-400">
-                  {game.metadata?.releaseYear ? <span>{game.metadata.releaseYear}</span> : null}
-                  {game.metadata?.region ? <span>{game.metadata.region}</span> : null}
-                  {game.missing ? <span className="text-rose-300">Saknas lokalt</span> : null}
+              {game.missing ? (
+                <div className="absolute bottom-2 left-2">
+                  <span className="rounded-full bg-rose-500/80 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">Saknas</span>
                 </div>
-              </div>
+              ) : null}
             </div>
-            <div className="space-y-3 p-3">
-              <div className="flex items-center justify-between gap-2">
-                <p className="truncate text-[10px] uppercase tracking-[0.16em] text-slate-400">{effectiveCore ?? 'Ingen core'}</p>
-                <span className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                  {game.source === 'folder' ? 'Mapp' : 'Upload'}
-                </span>
-              </div>
-              <p className="line-clamp-2 text-xs text-slate-500">
-                {formatFileSize(game.fileSizeBytes) ?? game.extension}
-                {game.playCount ? ` · ${game.playCount} spelningar` : ''}
+            <div className="p-2.5">
+              <p className="text-[9px] uppercase tracking-[0.22em] text-slate-300/60">
+                {effectiveCore ?? 'Ingen core'}
+                {formatFileSize(game.fileSizeBytes) ? ` · ${formatFileSize(game.fileSizeBytes)}` : ''}
               </p>
-              <div className="flex flex-wrap items-center gap-2">
+              <h3 className="mt-0.5 line-clamp-2 text-[0.8rem] font-semibold leading-snug text-white">
+                {getGameDisplayTitle(game)}
+              </h3>
+              {game.metadata?.region ? (
+                <p className="mt-0.5 text-[9px] uppercase tracking-[0.16em] text-slate-400">{game.metadata.region}</p>
+              ) : null}
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
                   type="button"
                   onClick={() => onLaunch(game)}
@@ -301,17 +293,15 @@ function GamesGrid({
                   {editing ? 'Klar' : 'Anpassa'}
                 </button>
               </div>
-              {!canLaunchGame(game) ? (
-                <p className="text-[11px] text-slate-500">
-                  {game.missing
-                    ? 'ROM-filen kunde inte hittas vid senaste synken.'
-                    : isPluginDesktopHost()
-                      ? 'Importera via desktop picker eller välj en lokal mapp.'
-                      : 'Desktop krävs för att starta spel.'}
+              {!canLaunchGame(game) && !game.missing ? (
+                <p className="mt-1 text-[11px] text-slate-500">
+                  {isPluginDesktopHost()
+                    ? 'Importera via desktop picker eller välj en lokal mapp.'
+                    : 'Desktop krävs för att starta spel.'}
                 </p>
               ) : null}
               {editing ? (
-                <div className="space-y-3 rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+                <div className="mt-3 space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3">
                   <div className="space-y-1">
                     <label className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Konsol</label>
                     <select

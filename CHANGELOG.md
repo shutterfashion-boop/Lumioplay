@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- Redesigned game cards to match Lumio's movie grid — transparent background, no card border, poster-first with info below using the same minimal style as media cards
+- Title, region, and meta info moved below the poster instead of overlaid; matches the movie card text layout exactly
+- Removed separate dark info panel — the section below the poster is now fully transparent
+
 ## 0.3.0
 
 - Updated game grid cards to match Lumio's visual theme — lighter borders, subtle translucent background, cleaner hover states
