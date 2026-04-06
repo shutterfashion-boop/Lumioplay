@@ -40,6 +40,10 @@ const activePillClass =
   'border-accent-400/50 bg-accent-400/10 text-accent-300'
 const cardButtonClass =
   'flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all'
+const panelBorderColor = 'rgba(148, 163, 184, 0.14)'
+const panelBackground = 'linear-gradient(180deg, rgba(15, 23, 42, 0.98), rgba(7, 12, 24, 0.98))'
+const cardShadow = '0 12px 40px rgba(2, 6, 23, 0.45)'
+const posterBackground = 'radial-gradient(circle at top, rgba(34, 211, 238, 0.16), transparent 42%), linear-gradient(135deg, rgba(15, 23, 42, 0.92), rgba(2, 6, 23, 1))'
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -243,8 +247,19 @@ function GamesGrid({
                 ? 'border-rose-500/20 opacity-70'
                 : 'border-slate-800 hover:border-cyan-300/25 hover:shadow-[0_18px_50px_rgba(34,211,238,0.08)]'
             }`}
+            style={{
+              borderColor: game.missing ? 'rgba(244, 63, 94, 0.2)' : panelBorderColor,
+              background: panelBackground,
+              boxShadow: cardShadow,
+              borderRadius: 24,
+            }}
           >
-            <div className="relative aspect-[3/4] bg-[radial-gradient(circle_at_top,rgba(34,211,238,0.16),transparent_42%),linear-gradient(135deg,rgba(15,23,42,0.92),rgba(2,6,23,1))]">
+            <div
+              className="relative aspect-[3/4]"
+              style={{
+                background: posterBackground,
+              }}
+            >
               {game.coverUrl ? (
                 <img
                   src={game.coverUrl}
@@ -613,6 +628,10 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
             onChange={(event) => setQuery(event.target.value)}
             placeholder="Sök spel"
             className="h-9 w-full max-w-xs rounded-full border border-white/10 bg-white/5 px-4 text-[0.8rem] text-white placeholder:text-slate-500 outline-none transition-all focus:border-accent-400/30 focus:bg-white/[0.07]"
+            style={{
+              borderColor: panelBorderColor,
+              backgroundColor: 'rgba(15, 23, 42, 0.46)',
+            }}
           />
           <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
         </div>

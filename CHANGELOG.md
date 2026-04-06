@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1
+
+- Fixed the external plugin host bridge so Lumioplay can detect the Lumio desktop app and use desktop-only helpers
+- Refined ROM sync merging so fresh metadata and cleaner titles replace stale imported names
+- Improved cover-art candidate generation for libretro thumbnails with cleaner title variants
+- Softened search and card borders to better match Lumio's darker visual theme
+
 ## 0.2.0
 
 - Added a richer local library model with favorites, manual platform overrides, manual core overrides, and persisted metadata

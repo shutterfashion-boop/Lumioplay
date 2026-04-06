@@ -29,6 +29,8 @@ function trimNoiseTokens(value: string): string {
     .replace(/\([^)]*\b(?:rev|beta|proto|sample|hack|demo)\b[^)]*\)/gi, ' ')
     .replace(/\b(?:v\d+(?:\.\d+)?)\b/gi, ' ')
     .replace(/\b(?:usa|europe|eur|japan|jpn|world|asia|pal|ntsc|en|eng|fr|de|es|it)\b/gi, ' ')
+    .replace(/\(\s*\)/g, ' ')
+    .replace(/\[\s*\]/g, ' ')
     .replace(/[_+.]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -75,10 +77,14 @@ function createTitleVariants(baseTitle: string): string[] {
   const variants = new Set<string>()
   const normalized = normalizeTitleForLookup(baseTitle)
   if (normalized) variants.add(normalized)
+  const withoutParenthetical = normalized.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
+  if (withoutParenthetical) variants.add(withoutParenthetical)
   const withoutEdition = normalized.replace(/\b(?:disc|disk|side)\s*[a-z0-9]+\b/gi, '').trim()
   if (withoutEdition) variants.add(withoutEdition)
   const collapsed = normalized.replace(/\s*-\s*/g, ': ').trim()
   if (collapsed) variants.add(collapsed)
+  const withoutSubtitleSuffix = normalized.replace(/\s*[-:]\s.*$/, '').trim()
+  if (withoutSubtitleSuffix) variants.add(withoutSubtitleSuffix)
   return Array.from(variants)
 }
 
@@ -125,4 +131,3 @@ export async function resolveFirstReachableCoverUrl(candidateUrls: string[]): Pr
 export function getGameDisplayTitle(game: LumioplayGame): string {
   return game.metadata?.displayTitle?.trim() || game.title
 }
-

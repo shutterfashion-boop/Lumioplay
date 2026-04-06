@@ -53,6 +53,7 @@ export interface SettingsSection {
   id: string
   label: PluginText
   Section: React.ComponentType
+  pluginId?: string
 }
 
 export interface HomeRowContribution {
@@ -100,43 +101,85 @@ export interface LumioPlugin {
   register(ctx: PluginContext): void
 }
 
+type PluginRuntimeSdk = {
+  getScopedStorageItem(key: string): string | null
+  setScopedStorageItem(key: string, value: string): void
+  isPluginDesktopHost(): boolean
+  pickPluginFolder(): Promise<string | null>
+  pickPluginFiles(filters?: PluginFileDialogFilter[]): Promise<string[] | null>
+  scanPluginDirectory(directory: string, extensions?: string[]): Promise<PluginIndexedFile[] | null>
+  executePluginDesktopCommand(options: PluginDesktopCommandOptions): Promise<PluginDesktopCommandResult>
+  spawnPluginDesktopCommand(options: PluginDesktopCommandOptions): Promise<PluginDesktopSpawnResult>
+}
+
+declare global {
+  interface Window {
+    __lumioPluginRuntime?: {
+      sdk?: PluginRuntimeSdk
+    }
+  }
+}
+
+function getRuntimeSdk(): PluginRuntimeSdk | null {
+  if (typeof window === 'undefined') return null
+  return window.__lumioPluginRuntime?.sdk ?? null
+}
+
 export function getScopedStorageItem(key: string): string | null {
+  const sdk = getRuntimeSdk()
+  if (sdk) return sdk.getScopedStorageItem(key)
   if (typeof window === 'undefined') return null
   return window.localStorage.getItem(`lumioplay:${key}`)
 }
 
 export function setScopedStorageItem(key: string, value: string): void {
+  const sdk = getRuntimeSdk()
+  if (sdk) {
+    sdk.setScopedStorageItem(key, value)
+    return
+  }
   if (typeof window === 'undefined') return
   window.localStorage.setItem(`lumioplay:${key}`, value)
 }
 
 export function isPluginDesktopHost(): boolean {
+  const sdk = getRuntimeSdk()
+  if (sdk) return sdk.isPluginDesktopHost()
   return false
 }
 
 export async function pickPluginFolder(): Promise<string | null> {
-  return null
+  return getRuntimeSdk()?.pickPluginFolder() ?? null
 }
 
-export async function pickPluginFiles(_filters?: PluginFileDialogFilter[]): Promise<string[] | null> {
-  return null
+export async function pickPluginFiles(filters?: PluginFileDialogFilter[]): Promise<string[] | null> {
+  return getRuntimeSdk()?.pickPluginFiles(filters) ?? null
 }
 
 export async function scanPluginDirectory(
-  _directory: string,
-  _extensions?: string[],
+  directory: string,
+  extensions?: string[],
 ): Promise<PluginIndexedFile[] | null> {
-  return null
+  return getRuntimeSdk()?.scanPluginDirectory(directory, extensions) ?? null
 }
 
 export async function executePluginDesktopCommand(
-  _options: PluginDesktopCommandOptions,
+  options: PluginDesktopCommandOptions,
 ): Promise<PluginDesktopCommandResult> {
-  throw new Error('Desktop command execution is only available in the Lumio desktop host.')
+  const sdk = getRuntimeSdk()
+  if (!sdk) {
+    throw new Error('Desktop command execution is only available in the Lumio desktop host.')
+  }
+  return sdk.executePluginDesktopCommand(options)
 }
 
 export async function spawnPluginDesktopCommand(
-  _options: PluginDesktopCommandOptions,
+  options: PluginDesktopCommandOptions,
 ): Promise<PluginDesktopSpawnResult> {
-  throw new Error('Desktop command execution is only available in the Lumio desktop host.')
+  const sdk = getRuntimeSdk()
+  if (!sdk) {
+    throw new Error('Desktop command execution is only available in the Lumio desktop host.')
+  }
+  return sdk.spawnPluginDesktopCommand(options)
 }
+

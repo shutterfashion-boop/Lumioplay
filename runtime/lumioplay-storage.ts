@@ -102,11 +102,10 @@ function buildGameId(sourcePath: string, fileName: string): string {
 function mergeImportedGameWithExisting(nextGame: LumioplayGame, existing?: LumioplayGame): LumioplayGame {
   if (!existing) return nextGame
   const baseMetadata = nextGame.metadata ?? buildMetadataFromFileName(nextGame.fileName, nextGame.platform)
-  const existingMetadata = existing.metadata ?? buildMetadataFromFileName(existing.fileName, existing.platform)
   return {
     ...existing,
     ...nextGame,
-    title: existing.title || nextGame.title,
+    title: nextGame.title,
     coverUrl: existing.coverUrl ?? nextGame.coverUrl ?? null,
     favorite: existing.favorite ?? false,
     platformOverride: existing.platformOverride ?? null,
@@ -116,11 +115,8 @@ function mergeImportedGameWithExisting(nextGame: LumioplayGame, existing?: Lumio
     lastPlayedAt: existing.lastPlayedAt ?? null,
     metadata: {
       ...baseMetadata,
-      ...existingMetadata,
-      coverCandidates: existing.metadata?.coverCandidates?.length
-        ? existing.metadata.coverCandidates
-        : baseMetadata.coverCandidates ?? [],
-      coverUrl: existing.metadata?.coverUrl ?? baseMetadata.coverUrl ?? null,
+      coverCandidates: baseMetadata.coverCandidates ?? [],
+      coverUrl: existing.coverUrl ?? null,
     },
     missing: false,
     artworkStatus: existing.artworkStatus ?? (existing.coverUrl ? 'resolved' : 'idle'),
