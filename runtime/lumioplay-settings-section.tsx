@@ -58,14 +58,14 @@ export function LumioplaySettingsSection() {
     const picked = paths?.[0]
     if (!picked) return
     setRetroArchPathState(picked)
-    setStatusMessage('RetroArch-sökvägen uppdaterades.')
+    setStatusMessage('RetroArch-appen uppdaterades.')
   }
 
   async function handlePickCoresFolder() {
     const picked = await pickPluginFolder()
     if (!picked) return
     setRetroArchCoresPathState(picked)
-    setStatusMessage('Core-mappen uppdaterades.')
+    setStatusMessage('Libretro core-mappen uppdaterades.')
   }
 
   async function handleValidateSetup() {
@@ -79,7 +79,7 @@ export function LumioplaySettingsSection() {
         setRetroArchCoresPathState(result.coresPath || retroArchCoresPath)
       }
     } catch (error) {
-      setValidationMessage(error instanceof Error ? error.message : 'Kunde inte validera RetroArch-inställningarna.')
+      setValidationMessage(error instanceof Error ? error.message : 'Kunde inte validera inställningarna.')
     } finally {
       setValidationBusy(false)
     }
@@ -94,7 +94,7 @@ export function LumioplaySettingsSection() {
   return (
     <div className="space-y-5">
       <div>
-        <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">RetroArch</p>
+        <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Libretro</p>
         <h2 className="text-xl font-semibold text-white">Lumioplay</h2>
       </div>
 
@@ -102,7 +102,10 @@ export function LumioplaySettingsSection() {
         <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Vad behövs?</p>
         <div className="mt-3 space-y-2">
           <p>
-            Lumioplay kräver{' '}
+            Lumioplay startar spel direkt i Lumio via inbäddade libretro-kärnor. Det enda som krävs är en fungerande{' '}
+            <span className="text-slate-300">libretro core-mapp</span>.
+          </p>
+          <p>
             <a
               href="https://www.retroarch.com/index.php?page=platforms"
               target="_blank"
@@ -111,7 +114,7 @@ export function LumioplaySettingsSection() {
             >
               RetroArch
             </a>
-            {' '}och minst en libretro-core installerad på din dator.
+            {' '}är valfritt och används här mest som ett enkelt sätt att hämta kärnor.
           </p>
           <p>
             Kärnor laddas enklast ner inifrån RetroArch via{' '}
@@ -130,9 +133,9 @@ export function LumioplaySettingsSection() {
         </div>
         {retroArchPath ? (
           <div className="mt-4 border-t border-white/[0.06] pt-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Installera kärnor</p>
+            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Öppna RetroArch</p>
             <p className="mb-3 text-sm text-slate-400">
-              Öppnar RetroArch där du kan ladda ner kärnor via{' '}
+              Valfritt. Öppnar RetroArch så att du kan ladda ner kärnor via{' '}
               <span className="text-slate-300">Load Core → Download a Core</span>.
             </p>
             <button
@@ -161,13 +164,13 @@ export function LumioplaySettingsSection() {
           {saved ? <span className="text-xs text-emerald-400">Sparad</span> : null}
         </div>
         <p className="mt-3 text-sm text-slate-400">
-          Förslag för den här plattformen: {suggestedSetup.retroArchPath}
+          Förslag för RetroArch-appen på den här plattformen: {suggestedSetup.retroArchPath}
         </p>
         {validationMessage ? <p className="mt-2 text-sm text-slate-300">{validationMessage}</p> : null}
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs uppercase tracking-[0.16em] text-slate-500">RetroArch path</label>
+        <label className="text-xs uppercase tracking-[0.16em] text-slate-500">RetroArch app path (valfritt)</label>
         <div className="flex gap-3">
           <input
             value={retroArchPath}
@@ -188,12 +191,12 @@ export function LumioplaySettingsSection() {
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs uppercase tracking-[0.16em] text-slate-500">RetroArch cores path</label>
+        <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Libretro core-mapp</label>
         <div className="flex gap-3">
           <input
             value={retroArchCoresPath}
             onChange={(event) => setRetroArchCoresPathState(event.target.value)}
-            placeholder="/Applications/RetroArch.app/Contents/Resources/cores"
+            placeholder="/Users/jerry/Documents/games/cores"
             className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-accent-400/30"
           />
           {isPluginDesktopHost() ? (
@@ -276,10 +279,9 @@ export function LumioplaySettingsSection() {
           ))}
         </div>
         <p className="mt-4 text-xs text-slate-500">
-          Launch använder `retroarch -L &lt;core&gt; &lt;rom&gt;` via Lumio-hostens desktop-SDK och låter dig skriva över både konsol och core per spel.
+          Lumioplay väljer libretro-core utifrån konsol och låter dig skriva över både konsol och core per spel. RetroArch-appen ovan behövs bara om du vill öppna dess kärn-hantering.
         </p>
       </div>
     </div>
   )
 }
-

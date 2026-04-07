@@ -46,6 +46,7 @@ const activePillClass =
   'border-accent-400/50 bg-accent-400/10 text-accent-300'
 const cardButtonClass =
   'flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all'
+const GAME_OVERLAY_TOP_OVERSCAN = 56
 const KEYBOARD_TO_JOYPAD: Record<string, number> = {
   KeyZ: 0,
   KeyA: 1,
@@ -267,6 +268,7 @@ function GamesGrid({
         const effectivePlatform = getEffectivePlatform(game)
         const effectiveCore = getEffectiveCoreId(game)
         const editing = editingGameId === game.id
+        const displayCoverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null
 
         return (
           <div
@@ -274,11 +276,14 @@ function GamesGrid({
             className={`group w-full cursor-pointer bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${game.missing ? 'opacity-70' : ''}`}
           >
             <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
-              {game.coverUrl ? (
+              {displayCoverUrl ? (
                 <img
-                  src={game.coverUrl}
+                  src={displayCoverUrl}
                   alt={getGameDisplayTitle(game)}
                   className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                  onError={(event) => {
+                    event.currentTarget.style.display = 'none'
+                  }}
                 />
               ) : null}
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
@@ -467,11 +472,12 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
       const element = gameContainerRef.current
       if (!element) return
       const rect = element.getBoundingClientRect()
+      const overscanTop = Math.min(GAME_OVERLAY_TOP_OVERSCAN, rect.top)
       void setLibretroBounds(
         rect.left,
-        rect.top,
+        rect.top - overscanTop,
         rect.width,
-        rect.height,
+        rect.height + overscanTop,
         window.innerHeight,
         window.devicePixelRatio,
       )
@@ -687,16 +693,26 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const gamesNeedingCover = getStoredGames().filter(
       (game) => (force || (game.artworkStatus !== 'missing' && !game.coverUrl)) && game.metadata?.coverCandidates?.length,
     )
-    if (gamesNeedingCover.length === 0) return
+    if (gamesNeedingCover.length === 0) {
+      setStatusMessage('Inga fler posters att hämta just nu.')
+      return
+    }
     posterSyncCancelRef.current = false
     setSyncingPosters(true)
+    let resolvedCount = 0
     try {
       for (const game of gamesNeedingCover) {
         if (posterSyncCancelRef.current) break
         const resolvedCover = await resolveFirstReachableCoverUrl(game.metadata?.coverCandidates ?? [])
         setGameCover(game.id, resolvedCover)
-        refreshGames()
+        if (resolvedCover) resolvedCount += 1
       }
+      refreshGames()
+      setStatusMessage(
+        resolvedCount > 0
+          ? `${resolvedCount} posters uppdaterades.`
+          : 'Hittade inga nya posters för spelen i biblioteket.',
+      )
     } finally {
       setSyncingPosters(false)
     }
@@ -788,11 +804,17 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
       {gameActive && (
         <div
           ref={gameContainerRef}
-          className="fixed inset-0 z-50 bg-black"
+          className="fixed inset-0 z-50"
           tabIndex={-1}
-          style={{ outline: 'none' }}
+          style={{
+            outline: 'none',
+            top: `-${GAME_OVERLAY_TOP_OVERSCAN}px`,
+            height: `calc(100vh + ${GAME_OVERLAY_TOP_OVERSCAN}px)`,
+            background: 'transparent',
+          }}
         >
-          <div className="absolute right-4 top-4 flex items-center gap-2">
+          <div className="pointer-events-none absolute inset-0 bg-transparent" />
+          <div className="pointer-events-auto absolute right-4 top-[calc(1rem+56px)] flex items-center gap-2">
             <button
               type="button"
               className={`${cardButtonClass} border bg-black/60 text-white backdrop-blur-sm hover:bg-white/10`}
@@ -807,7 +829,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
               Avsluta
             </button>
           </div>
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[0.6rem] uppercase tracking-widest text-white/30">
+          <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-[0.6rem] uppercase tracking-widest text-white/30">
             Esc · Avsluta
           </div>
         </div>

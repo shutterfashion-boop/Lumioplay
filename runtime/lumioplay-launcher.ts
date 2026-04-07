@@ -107,7 +107,7 @@ export function getSuggestedRetroArchSetup(): RetroArchSuggestedSetup {
   return {
     retroArchPath: '/Applications/RetroArch.app',
     retroArchCoresPath: '/Applications/RetroArch.app/Contents/Resources/cores',
-    label: 'RetroArch standardinstallering för macOS',
+    label: 'Vanlig libretro-installation för macOS',
   }
 }
 
@@ -124,11 +124,8 @@ export async function validateRetroArchSetup(
   const coresPath = trimTrailingSlashes(inputRetroArchCoresPath) || inferRetroArchCoresPath(inputRetroArchPath)
   const details: string[] = []
 
-  if (!executablePath) {
-    details.push('RetroArch-sökvägen saknas.')
-  }
   if (!coresPath) {
-    details.push('Core-mappen saknas.')
+    details.push('Libretro core-mappen saknas.')
   }
 
   if (!isPluginDesktopHost()) {
@@ -141,18 +138,26 @@ export async function validateRetroArchSetup(
   }
 
   if (executablePath && !(await pathExists(executablePath))) {
-    details.push('RetroArch-binären kunde inte hittas på den angivna sökvägen.')
+    details.push('RetroArch-appen kunde inte hittas på den angivna sökvägen.')
   }
   if (coresPath && !(await pathExists(coresPath))) {
     details.push('Libretro core-mappen kunde inte hittas på den angivna sökvägen.')
   }
 
   if (details.length === 0) {
-    details.push('RetroArch-konfigurationen ser giltig ut.')
+    details.push(
+      executablePath
+        ? 'RetroArch-appen och core-mappen ser giltiga ut.'
+        : 'Core-mappen ser giltig ut. RetroArch-appen är valfri.',
+    )
   }
 
   return {
-    ok: details.length === 1 && details[0] === 'RetroArch-konfigurationen ser giltig ut.',
+    ok: details.length === 1
+      && (
+        details[0] === 'RetroArch-appen och core-mappen ser giltiga ut.'
+        || details[0] === 'Core-mappen ser giltig ut. RetroArch-appen är valfri.'
+      ),
     executablePath,
     coresPath,
     details,
@@ -258,6 +263,9 @@ export async function launchLibretroGameEmbedded(game: LumioplayGame): Promise<v
   }
 
   const corePath = buildCorePath(coreId, configuredCoresPath)
+  if (!(await pathExists(corePath))) {
+    throw new Error(`Libretro-coren kunde inte hittas: ${corePath}`)
+  }
   await launchLibretroGame(corePath, game.romPath)
 }
 

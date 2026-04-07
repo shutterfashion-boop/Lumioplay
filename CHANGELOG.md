@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.5
+
+- Fixed embedded libretro overlay so the game view is no longer covered by an opaque black layer
+- Expanded bounds sync slightly upward to hide the top gap above the game surface
+- Improved poster syncing feedback and fallback rendering from metadata cover URLs
+- Updated Lumioplay copy and settings so libretro core folders are primary and RetroArch is optional
+
 ## 0.3.3
 
 - Fixed card border-radius: removed conflicting `overflow-hidden` from outer wrapper so poster corners render correctly
