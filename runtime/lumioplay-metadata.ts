@@ -44,6 +44,10 @@ function normalizeTitleForLookup(value: string): string {
     .trim()
 }
 
+function normalizeDiacritics(value: string): string {
+  return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+}
+
 function createSortTitle(value: string): string {
   return value
     .toLowerCase()
@@ -73,24 +77,71 @@ function extractRegion(fileName: string): string | null {
   return null
 }
 
-function createTitleVariants(baseTitle: string): string[] {
-  const variants = new Set<string>()
-  const normalized = normalizeTitleForLookup(baseTitle)
-  if (normalized) variants.add(normalized)
-  const withoutParenthetical = normalized.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
-  if (withoutParenthetical) variants.add(withoutParenthetical)
-  const withoutEdition = normalized.replace(/\b(?:disc|disk|side)\s*[a-z0-9]+\b/gi, '').trim()
+function addVariant(variants: Set<string>, value: string) {
+  const normalized = normalizeTitleForLookup(value)
+  if (!normalized) return
+  variants.add(normalized)
+
+  const withoutParens = normalized.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
+  if (withoutParens) variants.add(withoutParens)
+
+  const withoutEdition = normalized.replace(/\b(?:disc|disk|side)\s*[a-z0-9]+\b/gi, '').replace(/\s+/g, ' ').trim()
   if (withoutEdition) variants.add(withoutEdition)
-  const collapsed = normalized.replace(/\s*-\s*/g, ': ').trim()
-  if (collapsed) variants.add(collapsed)
+
+  const hyphenToColon = normalized.replace(/\s*-\s*/g, ': ').replace(/\s+/g, ' ').trim()
+  if (hyphenToColon) variants.add(hyphenToColon)
+
+  const colonToHyphen = normalized.replace(/\s*:\s*/g, ' - ').replace(/\s+/g, ' ').trim()
+  if (colonToHyphen) variants.add(colonToHyphen)
+
   const withoutSubtitleSuffix = normalized.replace(/\s*[-:]\s.*$/, '').trim()
   if (withoutSubtitleSuffix) variants.add(withoutSubtitleSuffix)
+
+  const compactPunctuation = normalized.replace(/['".,!]/g, '').replace(/\s+/g, ' ').trim()
+  if (compactPunctuation) variants.add(compactPunctuation)
+
+  if (normalized.includes('&')) {
+    variants.add(normalized.replace(/\s*&\s*/g, ' and ').replace(/\s+/g, ' ').trim())
+  }
+  if (/\band\b/i.test(normalized)) {
+    variants.add(normalized.replace(/\band\b/gi, '&').replace(/\s+/g, ' ').trim())
+  }
+
+  const leadingArticle = normalized.match(/^(the|a|an)\s+(.+)$/i)
+  if (leadingArticle) {
+    variants.add(`${leadingArticle[2]}, ${leadingArticle[1].slice(0, 1).toUpperCase()}${leadingArticle[1].slice(1).toLowerCase()}`)
+  }
+
+  const trailingArticle = normalized.match(/^(.+),\s*(the|a|an)$/i)
+  if (trailingArticle) {
+    variants.add(`${trailingArticle[2]} ${trailingArticle[1]}`)
+  }
+
+  const withoutDiacritics = normalizeDiacritics(normalized)
+  if (withoutDiacritics) variants.add(withoutDiacritics)
+}
+
+function createTitleVariants(baseTitle: string, fileName?: string): string[] {
+  const variants = new Set<string>()
+  addVariant(variants, baseTitle)
+
+  const fromFileName = fileName
+    ?.replace(/\.[^/.]+$/, '')
+    .replace(/\[[^\]]+\]/g, ' ')
+    .replace(/\([^)]*\b(?:rev|beta|proto|sample|hack|demo)\b[^)]*\)/gi, ' ')
+    .replace(/[_+.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (fromFileName) {
+    addVariant(variants, fromFileName)
+  }
+
   return Array.from(variants)
 }
 
-export function buildCoverCandidates(platform: LumioplayConsoleId, title: string): string[] {
+export function buildCoverCandidates(platform: LumioplayConsoleId, title: string, fileName?: string): string[] {
   const systemName = LIBRETRO_SYSTEMS[platform]
-  const titleVariants = createTitleVariants(title)
+  const titleVariants = createTitleVariants(title, fileName)
   return titleVariants.map((variant) => {
     const encodedSystem = encodeURIComponent(systemName)
     const encodedTitle = encodeURIComponent(variant)
@@ -102,7 +153,7 @@ export function buildMetadataFromFileName(fileName: string, _platform: Lumioplay
   const basename = fileName.replace(/\.[^/.]+$/, '')
   const cleanedTitle = trimNoiseTokens(basename)
   const displayTitle = cleanedTitle || basename
-  const coverCandidates: string[] = []
+  const coverCandidates = buildCoverCandidates(_platform, displayTitle, fileName)
   return {
     displayTitle,
     sortTitle: createSortTitle(displayTitle),

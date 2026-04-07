@@ -2,10 +2,12 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
+  getScopedStorageItem,
   isPluginDesktopHost,
   pickPluginFiles,
   pickPluginFolder,
   scanPluginDirectory,
+  setScopedStorageItem,
 } from '@/lib/plugin-sdk'
 import { buildCoverCandidates, getGameDisplayTitle, resolveFirstReachableCoverUrl } from './lumioplay-metadata'
 import {
@@ -67,6 +69,9 @@ const JOYPAD_BUTTON_COUNT = 16
 const POSTER_SYNC_CONCURRENCY = 3
 const POSTER_SYNC_BATCH_SIZE = 20
 const POSTER_SYNC_AUTO_LIMIT = 10
+const POSTER_SYNC_MISS_CACHE_KEY = 'lumioplay_poster_miss_cache_v1'
+const POSTER_SYNC_MISS_TTL_MS = 6 * 60 * 60 * 1000
+const POSTER_SYNC_MAX_MISS_ENTRIES = 2500
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -578,21 +583,80 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const [posterSyncProgress, setPosterSyncProgress] = useState<{ processed: number; total: number; resolved: number } | null>(null)
   const posterSyncInFlightRef = useRef(false)
   const posterSyncCancelRequestedRef = useRef(false)
-  const posterSyncMissCacheRef = useRef(new Set<string>())
+  const posterSyncMissCacheRef = useRef(new Map<string, number>())
+  const posterSyncMissCacheDirtyRef = useRef(false)
+
+  function loadPosterMissCache() {
+    try {
+      const raw = getScopedStorageItem(POSTER_SYNC_MISS_CACHE_KEY)
+      if (!raw) return
+      const parsed = JSON.parse(raw) as Record<string, number>
+      const now = Date.now()
+      const next = new Map<string, number>()
+      Object.entries(parsed).forEach(([url, expiresAt]) => {
+        if (!url || !Number.isFinite(expiresAt)) return
+        if (expiresAt > now) next.set(url, expiresAt)
+      })
+      posterSyncMissCacheRef.current = next
+      posterSyncMissCacheDirtyRef.current = false
+    } catch {
+      posterSyncMissCacheRef.current = new Map<string, number>()
+      posterSyncMissCacheDirtyRef.current = false
+    }
+  }
+
+  function savePosterMissCache() {
+    if (!posterSyncMissCacheDirtyRef.current) return
+    const now = Date.now()
+    const entries = Array.from(posterSyncMissCacheRef.current.entries())
+      .filter(([, expiresAt]) => expiresAt > now)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, POSTER_SYNC_MAX_MISS_ENTRIES)
+    const payload: Record<string, number> = {}
+    entries.forEach(([url, expiresAt]) => {
+      payload[url] = expiresAt
+    })
+    setScopedStorageItem(POSTER_SYNC_MISS_CACHE_KEY, JSON.stringify(payload))
+    posterSyncMissCacheRef.current = new Map(entries)
+    posterSyncMissCacheDirtyRef.current = false
+  }
+
+  function isMissCached(url: string): boolean {
+    const expiresAt = posterSyncMissCacheRef.current.get(url)
+    if (!expiresAt) return false
+    if (expiresAt > Date.now()) return true
+    posterSyncMissCacheRef.current.delete(url)
+    posterSyncMissCacheDirtyRef.current = true
+    return false
+  }
+
+  function markMissCached(url: string) {
+    posterSyncMissCacheRef.current.set(url, Date.now() + POSTER_SYNC_MISS_TTL_MS)
+    posterSyncMissCacheDirtyRef.current = true
+  }
+
+  function clearMissCached(url: string) {
+    if (!posterSyncMissCacheRef.current.has(url)) return
+    posterSyncMissCacheRef.current.delete(url)
+    posterSyncMissCacheDirtyRef.current = true
+  }
+
+  useEffect(() => {
+    loadPosterMissCache()
+  }, [])
 
   function getPosterCandidates(game: LumioplayGame): string[] {
     const existing = Array.isArray(game.metadata?.coverCandidates) ? game.metadata?.coverCandidates ?? [] : []
-    if (existing.length > 0) return existing.slice(0, 6)
-    return buildCoverCandidates(getEffectivePlatform(game), getGameDisplayTitle(game)).slice(0, 6)
+    if (existing.length > 0) return existing.slice(0, 12)
+    return buildCoverCandidates(getEffectivePlatform(game), getGameDisplayTitle(game), game.fileName).slice(0, 12)
   }
 
   async function resolvePosterCoverForGame(game: LumioplayGame): Promise<string | null> {
-    const candidates = getPosterCandidates(game).filter((url) => !posterSyncMissCacheRef.current.has(url))
+    const candidates = getPosterCandidates(game).filter((url) => !isMissCached(url))
     if (candidates.length === 0) return null
-    const resolved = await resolveFirstReachableCoverUrl(candidates, { timeoutMs: 2500, maxCandidates: 6 })
-    if (!resolved) {
-      candidates.forEach((url) => posterSyncMissCacheRef.current.add(url))
-    }
+    const resolved = await resolveFirstReachableCoverUrl(candidates, { timeoutMs: 2500, maxCandidates: 10 })
+    if (!resolved) candidates.forEach((url) => markMissCached(url))
+    if (resolved) clearMissCached(resolved)
     return resolved
   }
 
@@ -605,6 +669,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     posterSyncCancelRequestedRef.current = false
     setSyncingPosters(true)
     try {
+      loadPosterMissCache()
       const onlyMissing = options?.onlyMissing ?? true
       const candidates = sourceGames.filter((game) => {
         if (game.missing) return false
@@ -661,17 +726,15 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
       }
 
       if (!options?.silent) {
+        const unmatchedCount = Math.max(0, processedCount - resolvedCount)
         if (cancelled) {
-          setStatusMessage(`Postersync avbröts (${resolvedCount}/${processedCount}).`)
+          setStatusMessage(`Postersync avbröts (${resolvedCount}/${processedCount}). ${unmatchedCount} spel saknar matchande poster.`)
         } else {
-          setStatusMessage(
-            resolvedCount > 0
-              ? `${resolvedCount}/${processedCount} posters uppdaterades.`
-              : 'Hittade inga nya posters för spelen i biblioteket.',
-          )
+          setStatusMessage(`${resolvedCount}/${processedCount} posters uppdaterades. ${unmatchedCount} spel saknar matchande poster.`)
         }
       }
     } finally {
+      savePosterMissCache()
       posterSyncInFlightRef.current = false
       posterSyncCancelRequestedRef.current = false
       setSyncingPosters(false)
