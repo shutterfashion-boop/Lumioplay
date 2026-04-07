@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.9
+
+- Fixed unhandled errors in the settings-side folder pickers so choosing a core folder or RetroArch app no longer crashes the Lumioplay webview
+
 ## 0.3.8
 
 - Recut release to verify Lumio installs a fresh plugin bundle instead of a cached older runtime

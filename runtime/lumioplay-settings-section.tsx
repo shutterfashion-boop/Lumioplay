@@ -35,6 +35,12 @@ export function LumioplaySettingsSection() {
 
   const suggestedSetup = useMemo(() => getSuggestedRetroArchSetup(), [])
 
+  function formatUiError(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message
+    if (typeof error === 'string' && error.trim()) return error
+    return fallback
+  }
+
   function handleSave() {
     setRetroArchPath(retroArchPath.trim())
     setRetroArchCoresPath(retroArchCoresPath.trim())
@@ -52,20 +58,28 @@ export function LumioplaySettingsSection() {
   }
 
   async function handlePickRetroArch() {
-    const paths = await pickPluginFiles([
-      { name: 'RetroArch', extensions: ['app', 'exe'] },
-    ])
-    const picked = paths?.[0]
-    if (!picked) return
-    setRetroArchPathState(picked)
-    setStatusMessage('RetroArch-appen uppdaterades.')
+    try {
+      const paths = await pickPluginFiles([
+        { name: 'RetroArch', extensions: ['app', 'exe'] },
+      ])
+      const picked = paths?.[0]
+      if (!picked) return
+      setRetroArchPathState(picked)
+      setStatusMessage('RetroArch-appen uppdaterades.')
+    } catch (error) {
+      setStatusMessage(formatUiError(error, 'Kunde inte välja RetroArch-appen.'))
+    }
   }
 
   async function handlePickCoresFolder() {
-    const picked = await pickPluginFolder()
-    if (!picked) return
-    setRetroArchCoresPathState(picked)
-    setStatusMessage('Libretro core-mappen uppdaterades.')
+    try {
+      const picked = await pickPluginFolder()
+      if (!picked) return
+      setRetroArchCoresPathState(picked)
+      setStatusMessage('Libretro core-mappen uppdaterades.')
+    } catch (error) {
+      setStatusMessage(formatUiError(error, 'Kunde inte välja libretro core-mappen.'))
+    }
   }
 
   async function handleValidateSetup() {
