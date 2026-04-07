@@ -677,8 +677,6 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   useEffect(() => {
     if (!desktopReady || !autoSyncEnabled || savedFolders.length === 0) return
 
-    void syncSavedFolders(true)
-
     const intervalId = window.setInterval(() => {
       void syncSavedFolders(true)
     }, autoSyncIntervalSeconds * 1000)
