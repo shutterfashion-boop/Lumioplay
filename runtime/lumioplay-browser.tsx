@@ -386,7 +386,7 @@ function GamesGrid({
 }
 
 export function LumioplayBrowsePage(_props: BrowsePageProps) {
-  const [games, setGames] = useState<LumioplayGame[]>(() => getStoredGames())
+  const [games, setGames] = useState<LumioplayGame[]>([])
   const [platform, setPlatform] = useState<LumioplayPlatformId>('all')
   const [query, setQuery] = useState('')
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -404,12 +404,24 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const gameContainerRef = useRef<HTMLDivElement | null>(null)
   const syncInFlightRef = useRef(false)
   const buttonStateRef = useRef<boolean[]>(Array(JOYPAD_BUTTON_COUNT).fill(false))
-  const savedFolders = getRomFolders()
-  const autoSyncEnabled = getAutoSyncEnabled()
-  const autoSyncIntervalSeconds = getAutoSyncIntervalSeconds()
+  const [savedFolders, setSavedFoldersState] = useState<string[]>([])
+  const [autoSyncEnabled, setAutoSyncEnabledState] = useState(false)
+  const [autoSyncIntervalSeconds, setAutoSyncIntervalSecondsState] = useState(45)
 
   useEffect(() => {
     setDesktopReady(isPluginDesktopHost())
+    try {
+      setGames(getStoredGames())
+      setSavedFoldersState(getRomFolders())
+      setAutoSyncEnabledState(getAutoSyncEnabled())
+      setAutoSyncIntervalSecondsState(getAutoSyncIntervalSeconds())
+    } catch (error) {
+      setStatusMessage(formatUiError(error, 'Kunde inte lasa Lumioplay-biblioteket.'))
+      setGames([])
+      setSavedFoldersState([])
+      setAutoSyncEnabledState(false)
+      setAutoSyncIntervalSecondsState(45)
+    }
   }, [])
 
   useEffect(() => {
@@ -502,7 +514,14 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const filteredGames = useMemo(() => sortGames(games, resolvedPlatform, query), [games, resolvedPlatform, query])
 
   function refreshGames() {
-    setGames(getStoredGames())
+    try {
+      setGames(getStoredGames())
+      setSavedFoldersState(getRomFolders())
+      setAutoSyncEnabledState(getAutoSyncEnabled())
+      setAutoSyncIntervalSecondsState(getAutoSyncIntervalSeconds())
+    } catch (error) {
+      setStatusMessage(formatUiError(error, 'Kunde inte uppdatera Lumioplay-biblioteket.'))
+    }
   }
 
   function persistImportedGames(nextGames: LumioplayGame[], sourceLabel: string) {
@@ -623,7 +642,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
       if (!folder) return
       const existingFolders = new Set(getRomFolders())
       existingFolders.add(folder)
-      setRomFolders(Array.from(existingFolders))
+      const nextFolders = Array.from(existingFolders)
+      setRomFolders(nextFolders)
+      setSavedFoldersState(nextFolders)
       await importIndexedDirectory(folder)
     } catch (error) {
       setStatusMessage(formatUiError(error, 'Kunde inte läsa den valda mappen.'))

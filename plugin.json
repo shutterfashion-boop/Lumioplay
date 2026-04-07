@@ -2,7 +2,7 @@
   "id": "com.lumio.lumioplay",
   "slug": "lumioplay",
   "name": "Lumioplay",
-  "version": "0.3.12",
+  "version": "0.3.13",
   "description": "Browse local ROMs and launch retro games directly inside Lumio via embedded libretro.",
   "runtimeBundlePath": "dist/runtime.js",
   "official": false,
