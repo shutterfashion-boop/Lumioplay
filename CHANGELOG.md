@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.8
+
+- Recut release to verify Lumio installs a fresh plugin bundle instead of a cached older runtime
+
 ## 0.3.7
 
 - Fixed an unhandled folder-picker error path so choosing a ROM folder no longer crashes the Lumioplay webview
