@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.15
+
+- Added controller mapping settings so gamepad button indices can be customized per libretro button
+- Added configurable gamepad exit combo (default Select + Start) to always leave an active game
+- Simplified setup copy by removing RetroArch path and autodetection sections while keeping the core download link
+
 ## 0.3.9
 
 - Fixed unhandled errors in the settings-side folder pickers so choosing a core folder or RetroArch app no longer crashes the Lumioplay webview
