@@ -542,6 +542,12 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     setStatusMessage(`${importedGames.length} spel synkades från ${directory}.`)
   }
 
+  function formatUiError(error: unknown, fallback: string): string {
+    if (error instanceof Error && error.message.trim()) return error.message
+    if (typeof error === 'string' && error.trim()) return error
+    return fallback
+  }
+
   async function syncSavedFolders(silent = false) {
     if (!desktopReady || !savedFolders.length || syncInFlightRef.current) return
     syncInFlightRef.current = true
@@ -579,6 +585,10 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
             : 'Inga stödda ROM-filer hittades i sparade ROM-mappar.',
         )
       }
+    } catch (error) {
+      if (!silent) {
+        setStatusMessage(formatUiError(error, 'ROM-mappen kunde inte synkas.'))
+      }
     } finally {
       syncInFlightRef.current = false
       setSyncing(false)
@@ -586,30 +596,38 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   }
 
   async function handleNativeImport() {
-    const paths = await pickPluginFiles([
-      { name: 'ROM files', extensions: IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')) },
-    ])
-    if (!paths?.length) return
-    const importedGames = paths
-      .map((romPath) => {
-        const fileName = romPath.split(/[\\/]/).pop() ?? romPath
-        return createImportedGame({
-          fileName,
-          romPath,
-          source: 'upload',
+    try {
+      const paths = await pickPluginFiles([
+        { name: 'ROM files', extensions: IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')) },
+      ])
+      if (!paths?.length) return
+      const importedGames = paths
+        .map((romPath) => {
+          const fileName = romPath.split(/[\\/]/).pop() ?? romPath
+          return createImportedGame({
+            fileName,
+            romPath,
+            source: 'upload',
+          })
         })
-      })
-      .filter((game): game is LumioplayGame => Boolean(game))
-    persistImportedGames(importedGames, 'desktopimport')
+        .filter((game): game is LumioplayGame => Boolean(game))
+      persistImportedGames(importedGames, 'desktopimport')
+    } catch (error) {
+      setStatusMessage(formatUiError(error, 'Kunde inte importera ROM-filerna.'))
+    }
   }
 
   async function handleNativeFolderPick() {
-    const folder = await pickPluginFolder()
-    if (!folder) return
-    const existingFolders = new Set(getRomFolders())
-    existingFolders.add(folder)
-    setRomFolders(Array.from(existingFolders))
-    await importIndexedDirectory(folder)
+    try {
+      const folder = await pickPluginFolder()
+      if (!folder) return
+      const existingFolders = new Set(getRomFolders())
+      existingFolders.add(folder)
+      setRomFolders(Array.from(existingFolders))
+      await importIndexedDirectory(folder)
+    } catch (error) {
+      setStatusMessage(formatUiError(error, 'Kunde inte läsa den valda mappen.'))
+    }
   }
 
   function handleFilesSelected(fileList: FileList | null, source: 'upload' | 'folder') {
@@ -713,6 +731,8 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           ? `${resolvedCount} posters uppdaterades.`
           : 'Hittade inga nya posters för spelen i biblioteket.',
       )
+    } catch (error) {
+      setStatusMessage(formatUiError(error, 'Poster-synken misslyckades.'))
     } finally {
       setSyncingPosters(false)
     }
