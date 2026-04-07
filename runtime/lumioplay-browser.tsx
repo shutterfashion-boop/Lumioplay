@@ -386,7 +386,7 @@ function GamesGrid({
 }
 
 export function LumioplayBrowsePage(_props: BrowsePageProps) {
-  const [games, setGames] = useState<LumioplayGame[]>([])
+  const [games, setGames] = useState<LumioplayGame[]>(() => getStoredGames())
   const [platform, setPlatform] = useState<LumioplayPlatformId>('all')
   const [query, setQuery] = useState('')
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
@@ -404,24 +404,12 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const gameContainerRef = useRef<HTMLDivElement | null>(null)
   const syncInFlightRef = useRef(false)
   const buttonStateRef = useRef<boolean[]>(Array(JOYPAD_BUTTON_COUNT).fill(false))
-  const [savedFolders, setSavedFoldersState] = useState<string[]>([])
-  const [autoSyncEnabled, setAutoSyncEnabledState] = useState(false)
-  const [autoSyncIntervalSeconds, setAutoSyncIntervalSecondsState] = useState(45)
+  const savedFolders = getRomFolders()
+  const autoSyncEnabled = getAutoSyncEnabled()
+  const autoSyncIntervalSeconds = getAutoSyncIntervalSeconds()
 
   useEffect(() => {
     setDesktopReady(isPluginDesktopHost())
-    try {
-      setGames(getStoredGames())
-      setSavedFoldersState(getRomFolders())
-      setAutoSyncEnabledState(getAutoSyncEnabled())
-      setAutoSyncIntervalSecondsState(getAutoSyncIntervalSeconds())
-    } catch (error) {
-      setStatusMessage(formatUiError(error, 'Kunde inte lasa Lumioplay-biblioteket.'))
-      setGames([])
-      setSavedFoldersState([])
-      setAutoSyncEnabledState(false)
-      setAutoSyncIntervalSecondsState(45)
-    }
   }, [])
 
   useEffect(() => {
@@ -514,14 +502,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const filteredGames = useMemo(() => sortGames(games, resolvedPlatform, query), [games, resolvedPlatform, query])
 
   function refreshGames() {
-    try {
-      setGames(getStoredGames())
-      setSavedFoldersState(getRomFolders())
-      setAutoSyncEnabledState(getAutoSyncEnabled())
-      setAutoSyncIntervalSecondsState(getAutoSyncIntervalSeconds())
-    } catch (error) {
-      setStatusMessage(formatUiError(error, 'Kunde inte uppdatera Lumioplay-biblioteket.'))
-    }
+    setGames(getStoredGames())
   }
 
   function persistImportedGames(nextGames: LumioplayGame[], sourceLabel: string) {
@@ -561,12 +542,6 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     setStatusMessage(`${importedGames.length} spel synkades från ${directory}.`)
   }
 
-  function formatUiError(error: unknown, fallback: string): string {
-    if (error instanceof Error && error.message.trim()) return error.message
-    if (typeof error === 'string' && error.trim()) return error
-    return fallback
-  }
-
   async function syncSavedFolders(silent = false) {
     if (!desktopReady || !savedFolders.length || syncInFlightRef.current) return
     syncInFlightRef.current = true
@@ -604,10 +579,6 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
             : 'Inga stödda ROM-filer hittades i sparade ROM-mappar.',
         )
       }
-    } catch (error) {
-      if (!silent) {
-        setStatusMessage(formatUiError(error, 'ROM-mappen kunde inte synkas.'))
-      }
     } finally {
       syncInFlightRef.current = false
       setSyncing(false)
@@ -615,40 +586,30 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   }
 
   async function handleNativeImport() {
-    try {
-      const paths = await pickPluginFiles([
-        { name: 'ROM files', extensions: IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')) },
-      ])
-      if (!paths?.length) return
-      const importedGames = paths
-        .map((romPath) => {
-          const fileName = romPath.split(/[\\/]/).pop() ?? romPath
-          return createImportedGame({
-            fileName,
-            romPath,
-            source: 'upload',
-          })
+    const paths = await pickPluginFiles([
+      { name: 'ROM files', extensions: IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')) },
+    ])
+    if (!paths?.length) return
+    const importedGames = paths
+      .map((romPath) => {
+        const fileName = romPath.split(/[\\/]/).pop() ?? romPath
+        return createImportedGame({
+          fileName,
+          romPath,
+          source: 'upload',
         })
-        .filter((game): game is LumioplayGame => Boolean(game))
-      persistImportedGames(importedGames, 'desktopimport')
-    } catch (error) {
-      setStatusMessage(formatUiError(error, 'Kunde inte importera ROM-filerna.'))
-    }
+      })
+      .filter((game): game is LumioplayGame => Boolean(game))
+    persistImportedGames(importedGames, 'desktopimport')
   }
 
   async function handleNativeFolderPick() {
-    try {
-      const folder = await pickPluginFolder()
-      if (!folder) return
-      const existingFolders = new Set(getRomFolders())
-      existingFolders.add(folder)
-      const nextFolders = Array.from(existingFolders)
-      setRomFolders(nextFolders)
-      setSavedFoldersState(nextFolders)
-      await importIndexedDirectory(folder)
-    } catch (error) {
-      setStatusMessage(formatUiError(error, 'Kunde inte läsa den valda mappen.'))
-    }
+    const folder = await pickPluginFolder()
+    if (!folder) return
+    const existingFolders = new Set(getRomFolders())
+    existingFolders.add(folder)
+    setRomFolders(Array.from(existingFolders))
+    await importIndexedDirectory(folder)
   }
 
   function handleFilesSelected(fileList: FileList | null, source: 'upload' | 'folder') {
@@ -697,6 +658,8 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
 
   useEffect(() => {
     if (!desktopReady || !autoSyncEnabled || savedFolders.length === 0) return
+
+    void syncSavedFolders(true)
 
     const intervalId = window.setInterval(() => {
       void syncSavedFolders(true)
@@ -750,8 +713,6 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           ? `${resolvedCount} posters uppdaterades.`
           : 'Hittade inga nya posters för spelen i biblioteket.',
       )
-    } catch (error) {
-      setStatusMessage(formatUiError(error, 'Poster-synken misslyckades.'))
     } finally {
       setSyncingPosters(false)
     }
