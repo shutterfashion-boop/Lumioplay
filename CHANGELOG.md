@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.3.7
+
+- Fixed an unhandled folder-picker error path so choosing a ROM folder no longer crashes the Lumioplay webview
+- Added safer UI error handling around ROM import, folder sync, and poster sync
+
 ## 0.3.6
 
 - Fixed embedded libretro compositing so the game surface shows through the Lumio webview instead of appearing behind it
