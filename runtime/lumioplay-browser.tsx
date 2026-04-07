@@ -72,6 +72,7 @@ const POSTER_SYNC_AUTO_LIMIT = 10
 const POSTER_SYNC_MISS_CACHE_KEY = 'lumioplay_poster_miss_cache_v1'
 const POSTER_SYNC_MISS_TTL_MS = 6 * 60 * 60 * 1000
 const POSTER_SYNC_MAX_MISS_ENTRIES = 2500
+const POSTER_INDEX_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -103,6 +104,39 @@ function getCoreSuggestions(): string[] {
         .filter((value): value is string => Boolean(value)),
     ),
   )
+}
+
+const SYSTEM_NAME_BY_PLATFORM: Record<LumioplayConsoleId, string> = {
+  nes: 'Nintendo - Nintendo Entertainment System',
+  snes: 'Nintendo - Super Nintendo Entertainment System',
+  gb: 'Nintendo - Game Boy',
+  gbc: 'Nintendo - Game Boy Color',
+  gba: 'Nintendo - Game Boy Advance',
+  genesis: 'Sega - Mega Drive - Genesis',
+  n64: 'Nintendo - Nintendo 64',
+  ps1: 'Sony - PlayStation',
+}
+
+function normalizePosterLookupValue(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/%[0-9a-f]{2}/gi, '')
+    .replace(/\.png$/i, '')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/\[[^\]]*\]/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function getPreferredRegionTokens(region?: string | null): string[] {
+  if (!region) return []
+  const normalized = region.toLowerCase()
+  if (normalized.includes('usa') || normalized.includes('us')) return ['(us)', '(usa)', '(jp-us)']
+  if (normalized.includes('japan') || normalized.includes('jp')) return ['(jp)', '(japan)']
+  if (normalized.includes('europe') || normalized.includes('eur')) return ['(eu)', '(europe)']
+  if (normalized.includes('world')) return ['(world)', '(jp-us)', '(us)', '(usa)']
+  return []
 }
 
 function sortGames(games: LumioplayGame[], platform: LumioplayPlatformId, query: string): LumioplayGame[] {
@@ -585,6 +619,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const posterSyncCancelRequestedRef = useRef(false)
   const posterSyncMissCacheRef = useRef(new Map<string, number>())
   const posterSyncMissCacheDirtyRef = useRef(false)
+  const posterIndexCacheRef = useRef(
+    new Map<LumioplayConsoleId, { fetchedAt: number; entries: string[] }>(),
+  )
 
   function loadPosterMissCache() {
     try {
@@ -651,13 +688,118 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     return buildCoverCandidates(getEffectivePlatform(game), getGameDisplayTitle(game), game.fileName).slice(0, 12)
   }
 
+  async function getPosterIndexEntries(platform: LumioplayConsoleId): Promise<string[]> {
+    const cached = posterIndexCacheRef.current.get(platform)
+    if (cached && Date.now() - cached.fetchedAt < POSTER_INDEX_CACHE_TTL_MS) {
+      return cached.entries
+    }
+
+    const systemName = SYSTEM_NAME_BY_PLATFORM[platform]
+    if (!systemName) return []
+    const indexUrl = `https://thumbnails.libretro.com/${encodeURIComponent(systemName)}/Named_Boxarts/`
+    const response = await fetch(indexUrl, { cache: 'no-store' })
+    if (!response.ok) return []
+    const html = await response.text()
+    const matches = html.match(/href="([^"]+\.png)"/gi) ?? []
+    const entries = Array.from(
+      new Set(
+        matches
+          .map((raw) => raw.replace(/^href="/i, '').replace(/"$/i, ''))
+          .filter(Boolean),
+      ),
+    )
+    posterIndexCacheRef.current.set(platform, { fetchedAt: Date.now(), entries })
+    return entries
+  }
+
+  function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
+    const decoded = decodeURIComponent(entry)
+    const normalizedEntry = normalizePosterLookupValue(decoded)
+    if (!normalizedEntry) return -1000
+
+    const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
+    const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
+    const titleTokens = Array.from(
+      new Set(
+        `${displayTitle} ${fileTitle}`
+          .split(' ')
+          .map((token) => token.trim())
+          .filter((token) => token.length > 2 && !['the', 'and', 'for', 'with'].includes(token)),
+      ),
+    )
+    if (titleTokens.length === 0) return -1000
+
+    let score = 0
+    if (normalizedEntry.startsWith(displayTitle)) score += 80
+    if (displayTitle && normalizedEntry.includes(displayTitle)) score += 40
+    if (fileTitle && normalizedEntry.includes(fileTitle)) score += 30
+
+    const tokenHits = titleTokens.reduce((hits, token) => hits + (normalizedEntry.includes(token) ? 1 : 0), 0)
+    score += tokenHits * 8
+    score -= Math.max(0, titleTokens.length - tokenHits) * 6
+
+    if (/\[(h|b|t|p)/i.test(decoded)) score -= 45
+    if (/\(19xx\)|\(-\)/i.test(decoded)) score -= 30
+    if (/\(nintendo\)|\(konami\)|\(capcom\)|\(sega\)|\(namco\)/i.test(decoded)) score += 8
+
+    const regionHints = getPreferredRegionTokens(game.metadata?.region)
+    if (regionHints.length > 0) {
+      const lower = decoded.toLowerCase()
+      if (regionHints.some((token) => lower.includes(token))) score += 18
+    }
+
+    return score
+  }
+
+  async function resolvePosterFromIndex(game: LumioplayGame): Promise<string | null> {
+    const platform = getEffectivePlatform(game)
+    const entries = await getPosterIndexEntries(platform)
+    if (entries.length === 0) return null
+
+    const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
+    const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
+    const probeTerms = Array.from(
+      new Set(
+        `${displayTitle} ${fileTitle}`
+          .split(' ')
+          .map((token) => token.trim())
+          .filter((token) => token.length > 3),
+      ),
+    )
+
+    const shortlist = entries
+      .filter((entry) => {
+        const decoded = decodeURIComponent(entry).toLowerCase()
+        return probeTerms.length === 0 || probeTerms.some((term) => decoded.includes(term))
+      })
+      .map((entry) => ({ entry, score: rankPosterEntryForGame(entry, game) }))
+      .filter((candidate) => candidate.score > 0)
+      .sort((left, right) => right.score - left.score)
+      .slice(0, 12)
+
+    if (shortlist.length === 0) return null
+
+    const systemName = SYSTEM_NAME_BY_PLATFORM[platform]
+    const urls = shortlist.map(
+      (candidate) => `https://thumbnails.libretro.com/${encodeURIComponent(systemName)}/Named_Boxarts/${candidate.entry}`,
+    )
+    return resolveFirstReachableCoverUrl(urls, { timeoutMs: 2500, maxCandidates: 8 })
+  }
+
   async function resolvePosterCoverForGame(game: LumioplayGame): Promise<string | null> {
     const candidates = getPosterCandidates(game).filter((url) => !isMissCached(url))
-    if (candidates.length === 0) return null
-    const resolved = await resolveFirstReachableCoverUrl(candidates, { timeoutMs: 2500, maxCandidates: 10 })
-    if (!resolved) candidates.forEach((url) => markMissCached(url))
-    if (resolved) clearMissCached(resolved)
-    return resolved
+    if (candidates.length > 0) {
+      const resolvedDirect = await resolveFirstReachableCoverUrl(candidates, { timeoutMs: 2500, maxCandidates: 10 })
+      if (resolvedDirect) {
+        clearMissCached(resolvedDirect)
+        return resolvedDirect
+      }
+      candidates.forEach((url) => markMissCached(url))
+    }
+
+    const resolvedFromIndex = await resolvePosterFromIndex(game)
+    if (resolvedFromIndex) clearMissCached(resolvedFromIndex)
+    return resolvedFromIndex
   }
 
   async function syncPostersForGames(
