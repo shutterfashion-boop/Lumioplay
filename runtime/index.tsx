@@ -5,7 +5,7 @@ import { LumioplaySettingsSection } from './lumioplay-settings-section'
 export const LumioplayPlugin: LumioPlugin = {
   id: 'com.lumio.lumioplay',
   name: { en: 'Lumioplay', sv: 'Lumioplay' },
-  version: '0.3.17',
+  version: '0.3.18',
   description: {
     en: 'Browse local ROMs and launch retro games directly inside Lumio via embedded libretro.',
     sv: 'Bladdra bland lokala ROMs och starta retrospel direkt i Lumio via inbäddad libretro.',

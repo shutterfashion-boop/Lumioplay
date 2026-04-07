@@ -205,10 +205,9 @@ function LibraryToolbar({
       <button
         type="button"
         onClick={onSyncPosters}
-        disabled={syncingPosters}
         className={`${cardButtonClass} ${syncingPosters ? activePillClass : neutralPillClass}`}
       >
-        {syncingPosters ? 'Synkar posters...' : 'Synka posters'}
+        {syncingPosters ? 'Avbryt postersync' : 'Synka posters'}
       </button>
     </div>
   )
@@ -576,7 +575,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   }
 
   const [syncingPosters, setSyncingPosters] = useState(false)
+  const [posterSyncProgress, setPosterSyncProgress] = useState<{ processed: number; total: number; resolved: number } | null>(null)
   const posterSyncInFlightRef = useRef(false)
+  const posterSyncCancelRequestedRef = useRef(false)
   const posterSyncMissCacheRef = useRef(new Set<string>())
 
   function getPosterCandidates(game: LumioplayGame): string[] {
@@ -601,6 +602,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   ): Promise<void> {
     if (posterSyncInFlightRef.current) return
     posterSyncInFlightRef.current = true
+    posterSyncCancelRequestedRef.current = false
     setSyncingPosters(true)
     try {
       const onlyMissing = options?.onlyMissing ?? true
@@ -617,11 +619,22 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
 
       let resolvedCount = 0
       let processedCount = 0
+      let cancelled = false
+      setPosterSyncProgress({ processed: 0, total: limited.length, resolved: 0 })
+
       for (let start = 0; start < limited.length; start += POSTER_SYNC_BATCH_SIZE) {
+        if (posterSyncCancelRequestedRef.current) {
+          cancelled = true
+          break
+        }
         const batch = limited.slice(start, start + POSTER_SYNC_BATCH_SIZE)
         const updates: Array<{ gameId: string; coverUrl: string | null }> = []
 
         for (let idx = 0; idx < batch.length; idx += POSTER_SYNC_CONCURRENCY) {
+          if (posterSyncCancelRequestedRef.current) {
+            cancelled = true
+            break
+          }
           const chunk = batch.slice(idx, idx + POSTER_SYNC_CONCURRENCY)
           const chunkResults = await Promise.all(
             chunk.map(async (game) => ({
@@ -636,25 +649,33 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
               updates.push(result)
             }
           })
+          setPosterSyncProgress({ processed: processedCount, total: limited.length, resolved: resolvedCount })
         }
 
         if (updates.length > 0) {
           setGameCoversBatch(updates)
           refreshGames()
         }
+        if (cancelled) break
         await new Promise((resolve) => window.setTimeout(resolve, 180))
       }
 
       if (!options?.silent) {
-        setStatusMessage(
-          resolvedCount > 0
-            ? `${resolvedCount}/${processedCount} posters uppdaterades.`
-            : 'Hittade inga nya posters för spelen i biblioteket.',
-        )
+        if (cancelled) {
+          setStatusMessage(`Postersync avbröts (${resolvedCount}/${processedCount}).`)
+        } else {
+          setStatusMessage(
+            resolvedCount > 0
+              ? `${resolvedCount}/${processedCount} posters uppdaterades.`
+              : 'Hittade inga nya posters för spelen i biblioteket.',
+          )
+        }
       }
     } finally {
       posterSyncInFlightRef.current = false
+      posterSyncCancelRequestedRef.current = false
       setSyncingPosters(false)
+      window.setTimeout(() => setPosterSyncProgress(null), 1800)
     }
   }
 
@@ -876,6 +897,11 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
             void syncSavedFolders(false)
           }}
           onSyncPosters={() => {
+            if (syncingPosters) {
+              posterSyncCancelRequestedRef.current = true
+              setStatusMessage('Avbryter postersync...')
+              return
+            }
             void syncPostersForGames(getStoredGames(), { onlyMissing: true })
           }}
           desktopReady={desktopReady}
@@ -893,6 +919,13 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
         </div>
         {statusMessage ? <p className="text-sm text-slate-400">{statusMessage}</p> : null}
+        {posterSyncProgress ? (
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+            Postersync {posterSyncProgress.processed}/{posterSyncProgress.total}
+            {' · '}
+            träffar {posterSyncProgress.resolved}
+          </p>
+        ) : null}
         {launchState.message ? <p className="text-sm text-rose-300">{launchState.message}</p> : null}
       </div>
       <GamesGrid

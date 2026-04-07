@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.18
+
+- Added poster sync progress indicator (`processed/total` + resolved hits) in the library status area
+- Added safe cancel support for poster sync via the same toolbar button while syncing
+- Kept existing crash-avoidance limits (batched writes, capped concurrency, per-request timeout)
+
 ## 0.3.17
 
 - Made the in-game exit control persistent in a fixed top overlay so it is always visible above gameplay
