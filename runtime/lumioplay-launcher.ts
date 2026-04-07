@@ -1,7 +1,12 @@
 import {
   checkPluginPathExists,
   isPluginDesktopHost,
+  launchLibretroGame,
   launchPluginProgram,
+  onLibretroStopped,
+  sendLibretroInput,
+  setLibretroBounds,
+  stopLibretroGame,
 } from '@/lib/plugin-sdk'
 import {
   getEffectiveCoreId,
@@ -221,3 +226,40 @@ export async function launchGameWithRetroArch(game: LumioplayGame): Promise<void
   await launchPluginProgram(config.executablePath, ['-L', config.corePath, game.romPath])
 }
 
+export function canLaunchLibretro(game: LumioplayGame): boolean {
+  return (
+    isPluginDesktopHost() &&
+    !game.missing &&
+    isAbsolutePath(game.romPath) &&
+    Boolean(getEffectiveCoreId(game)) &&
+    Boolean(getEffectivePlatform(game))
+  )
+}
+
+export async function launchLibretroGameEmbedded(game: LumioplayGame): Promise<void> {
+  if (!isPluginDesktopHost()) {
+    throw new Error('Libretro-launch är bara tillgänglig i desktop-appen.')
+  }
+  if (game.missing) {
+    throw new Error('ROM-filen kunde inte hittas. Synka mappen igen.')
+  }
+  if (!isAbsolutePath(game.romPath)) {
+    throw new Error('Spelet saknar lokal filväg. Importera ROM:en via desktop file picker.')
+  }
+
+  const coreId = getEffectiveCoreId(game)
+  if (!coreId) {
+    throw new Error('Ingen core vald för spelet. Välj en core i spelets inställningar.')
+  }
+
+  const configuredCoresPath = trimTrailingSlashes(getRetroArchCoresPath()) || inferRetroArchCoresPath(getRetroArchPath())
+  if (!configuredCoresPath) {
+    throw new Error('Ställ in core-mapp i inställningarna först.')
+  }
+
+  const corePath = buildCorePath(coreId, configuredCoresPath)
+  await launchLibretroGame(corePath, game.romPath)
+}
+
+// Re-export SDK helpers so the browser component can import from one place
+export { setLibretroBounds, sendLibretroInput, onLibretroStopped, stopLibretroGame }

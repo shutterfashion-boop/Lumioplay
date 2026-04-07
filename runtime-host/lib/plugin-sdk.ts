@@ -117,6 +117,11 @@ type PluginRuntimeSdk = {
   spawnPluginDesktopCommand(options: PluginDesktopCommandOptions): Promise<PluginDesktopSpawnResult>
   checkPluginPathExists(path: string): Promise<boolean>
   launchPluginProgram(program: string, args: string[]): Promise<number>
+  launchLibretroGame(corePath: string, romPath: string): Promise<void>
+  stopLibretroGame(): Promise<void>
+  setLibretroBounds(x: number, y: number, w: number, h: number, windowHeight: number, scale: number): Promise<void>
+  sendLibretroInput(buttons: boolean[]): Promise<void>
+  onLibretroStopped(handler: () => void): () => void
 }
 
 declare global {
@@ -205,4 +210,43 @@ export async function launchPluginProgram(program: string, args: string[]): Prom
     throw new Error('Program launch is only available in the Lumio desktop host.')
   }
   return sdk.launchPluginProgram(program, args)
+}
+
+export async function launchLibretroGame(corePath: string, romPath: string): Promise<void> {
+  const sdk = getRuntimeSdk()
+  if (!sdk) {
+    throw new Error('Libretro embedding is only available in the Lumio desktop host.')
+  }
+  return sdk.launchLibretroGame(corePath, romPath)
+}
+
+export async function stopLibretroGame(): Promise<void> {
+  const sdk = getRuntimeSdk()
+  if (!sdk) return
+  return sdk.stopLibretroGame()
+}
+
+export async function setLibretroBounds(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  windowHeight: number,
+  scale: number,
+): Promise<void> {
+  const sdk = getRuntimeSdk()
+  if (!sdk) return
+  return sdk.setLibretroBounds(x, y, w, h, windowHeight, scale)
+}
+
+export async function sendLibretroInput(buttons: boolean[]): Promise<void> {
+  const sdk = getRuntimeSdk()
+  if (!sdk) return
+  return sdk.sendLibretroInput(buttons)
+}
+
+export function onLibretroStopped(handler: () => void): () => void {
+  const sdk = getRuntimeSdk()
+  if (!sdk) return () => {}
+  return sdk.onLibretroStopped(handler)
 }
