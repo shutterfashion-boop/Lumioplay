@@ -115,12 +115,34 @@ export function buildMetadataFromFileName(fileName: string, _platform: Lumioplay
   }
 }
 
-export async function resolveFirstReachableCoverUrl(candidateUrls: string[]): Promise<string | null> {
-  for (const url of candidateUrls) {
+export async function resolveFirstReachableCoverUrl(
+  candidateUrls: string[],
+  options?: { timeoutMs?: number; maxCandidates?: number },
+): Promise<string | null> {
+  const timeoutMs = Math.max(500, options?.timeoutMs ?? 2500)
+  const maxCandidates = Math.max(1, options?.maxCandidates ?? 6)
+  const limited = candidateUrls.filter(Boolean).slice(0, maxCandidates)
+  for (const url of limited) {
     const resolved = await new Promise<string | null>((resolve) => {
       const image = new Image()
-      image.onload = () => resolve(url)
-      image.onerror = () => resolve(null)
+      const cleanup = () => {
+        image.onload = null
+        image.onerror = null
+      }
+      const timer = window.setTimeout(() => {
+        cleanup()
+        resolve(null)
+      }, timeoutMs)
+      image.onload = () => {
+        window.clearTimeout(timer)
+        cleanup()
+        resolve(url)
+      }
+      image.onerror = () => {
+        window.clearTimeout(timer)
+        cleanup()
+        resolve(null)
+      }
       image.src = url
     })
     if (resolved) return resolved

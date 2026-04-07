@@ -7,7 +7,7 @@ import {
   pickPluginFolder,
   scanPluginDirectory,
 } from '@/lib/plugin-sdk'
-import { getGameDisplayTitle } from './lumioplay-metadata'
+import { buildCoverCandidates, getGameDisplayTitle, resolveFirstReachableCoverUrl } from './lumioplay-metadata'
 import {
   createImportedGame,
   getAutoSyncEnabled,
@@ -22,6 +22,7 @@ import {
   LUMIOPLAY_PLATFORMS,
   markGameLaunched,
   setGameCoreOverride,
+  setGameCoversBatch,
   setGamePlatformOverride,
   setRomFolders,
   syncFolderGames,
@@ -63,6 +64,9 @@ const KEYBOARD_TO_JOYPAD: Record<string, number> = {
   KeyW: 11,
 }
 const JOYPAD_BUTTON_COUNT = 16
+const POSTER_SYNC_CONCURRENCY = 3
+const POSTER_SYNC_BATCH_SIZE = 20
+const POSTER_SYNC_AUTO_LIMIT = 10
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -158,16 +162,20 @@ function LibraryToolbar({
   onUploadRoms,
   onChooseFolder,
   onRescanFolders,
+  onSyncPosters,
   desktopReady,
   hasSavedFolders,
   syncing,
+  syncingPosters,
 }: {
   onUploadRoms: () => void
   onChooseFolder: () => void
   onRescanFolders: () => void
+  onSyncPosters: () => void
   desktopReady: boolean
   hasSavedFolders: boolean
   syncing: boolean
+  syncingPosters: boolean
 }) {
   return (
     <div className="flex flex-wrap gap-3">
@@ -194,6 +202,14 @@ function LibraryToolbar({
           {syncing ? 'Synkar...' : 'Synka nu'}
         </button>
       ) : null}
+      <button
+        type="button"
+        onClick={onSyncPosters}
+        disabled={syncingPosters}
+        className={`${cardButtonClass} ${syncingPosters ? activePillClass : neutralPillClass}`}
+      >
+        {syncingPosters ? 'Synkar posters...' : 'Synka posters'}
+      </button>
     </div>
   )
 }
@@ -559,6 +575,89 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     setGames(getStoredGames())
   }
 
+  const [syncingPosters, setSyncingPosters] = useState(false)
+  const posterSyncInFlightRef = useRef(false)
+  const posterSyncMissCacheRef = useRef(new Set<string>())
+
+  function getPosterCandidates(game: LumioplayGame): string[] {
+    const existing = Array.isArray(game.metadata?.coverCandidates) ? game.metadata?.coverCandidates ?? [] : []
+    if (existing.length > 0) return existing.slice(0, 6)
+    return buildCoverCandidates(getEffectivePlatform(game), getGameDisplayTitle(game)).slice(0, 6)
+  }
+
+  async function resolvePosterCoverForGame(game: LumioplayGame): Promise<string | null> {
+    const candidates = getPosterCandidates(game).filter((url) => !posterSyncMissCacheRef.current.has(url))
+    if (candidates.length === 0) return null
+    const resolved = await resolveFirstReachableCoverUrl(candidates, { timeoutMs: 2500, maxCandidates: 6 })
+    if (!resolved) {
+      candidates.forEach((url) => posterSyncMissCacheRef.current.add(url))
+    }
+    return resolved
+  }
+
+  async function syncPostersForGames(
+    sourceGames: LumioplayGame[],
+    options?: { limit?: number; silent?: boolean; onlyMissing?: boolean },
+  ): Promise<void> {
+    if (posterSyncInFlightRef.current) return
+    posterSyncInFlightRef.current = true
+    setSyncingPosters(true)
+    try {
+      const onlyMissing = options?.onlyMissing ?? true
+      const candidates = sourceGames.filter((game) => {
+        if (game.missing) return false
+        if (!onlyMissing) return true
+        return !game.coverUrl
+      })
+      const limited = candidates.slice(0, Math.max(0, options?.limit ?? candidates.length))
+      if (limited.length === 0) {
+        if (!options?.silent) setStatusMessage('Inga spel saknar poster just nu.')
+        return
+      }
+
+      let resolvedCount = 0
+      let processedCount = 0
+      for (let start = 0; start < limited.length; start += POSTER_SYNC_BATCH_SIZE) {
+        const batch = limited.slice(start, start + POSTER_SYNC_BATCH_SIZE)
+        const updates: Array<{ gameId: string; coverUrl: string | null }> = []
+
+        for (let idx = 0; idx < batch.length; idx += POSTER_SYNC_CONCURRENCY) {
+          const chunk = batch.slice(idx, idx + POSTER_SYNC_CONCURRENCY)
+          const chunkResults = await Promise.all(
+            chunk.map(async (game) => ({
+              gameId: game.id,
+              coverUrl: await resolvePosterCoverForGame(game),
+            })),
+          )
+          chunkResults.forEach((result) => {
+            processedCount += 1
+            if (result.coverUrl) {
+              resolvedCount += 1
+              updates.push(result)
+            }
+          })
+        }
+
+        if (updates.length > 0) {
+          setGameCoversBatch(updates)
+          refreshGames()
+        }
+        await new Promise((resolve) => window.setTimeout(resolve, 180))
+      }
+
+      if (!options?.silent) {
+        setStatusMessage(
+          resolvedCount > 0
+            ? `${resolvedCount}/${processedCount} posters uppdaterades.`
+            : 'Hittade inga nya posters för spelen i biblioteket.',
+        )
+      }
+    } finally {
+      posterSyncInFlightRef.current = false
+      setSyncingPosters(false)
+    }
+  }
+
   function persistImportedGames(nextGames: LumioplayGame[], sourceLabel: string) {
     if (nextGames.length === 0) {
       setStatusMessage(`Inga stödda ROM-filer hittades i ${sourceLabel}.`)
@@ -567,6 +666,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const merged = upsertImportedGames(nextGames)
     setGames(merged)
     setStatusMessage(`${nextGames.length} spel importerades från ${sourceLabel}.`)
+    void syncPostersForGames(nextGames, { limit: POSTER_SYNC_AUTO_LIMIT, silent: true, onlyMissing: true })
   }
 
   async function importIndexedDirectory(directory: string) {
@@ -594,6 +694,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const merged = syncFolderGames(directory, importedGames)
     setGames(merged)
     setStatusMessage(`${importedGames.length} spel synkades från ${directory}.`)
+    void syncPostersForGames(importedGames, { limit: POSTER_SYNC_AUTO_LIMIT, silent: true, onlyMissing: true })
   }
 
   async function syncSavedFolders(silent = false) {
@@ -626,6 +727,10 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
       }
 
       refreshGames()
+      if (totalFound > 0) {
+        const currentGames = getStoredGames()
+        void syncPostersForGames(currentGames, { limit: POSTER_SYNC_AUTO_LIMIT, silent: true, onlyMissing: true })
+      }
       if (!silent) {
         setStatusMessage(
           totalFound > 0
@@ -770,9 +875,13 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           onRescanFolders={() => {
             void syncSavedFolders(false)
           }}
+          onSyncPosters={() => {
+            void syncPostersForGames(getStoredGames(), { onlyMissing: true })
+          }}
           desktopReady={desktopReady}
           hasSavedFolders={savedFolders.length > 0}
           syncing={syncing}
+          syncingPosters={syncingPosters}
         />
         <div className="flex flex-wrap items-center gap-3">
           <input
@@ -831,16 +940,21 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           }}
         >
           <div className="pointer-events-none absolute inset-0 bg-transparent" />
-          <div className="pointer-events-auto absolute right-4 top-[calc(1rem+56px)] flex items-center gap-2">
-            <button
-              type="button"
-              className={`${cardButtonClass} border bg-black/60 text-white backdrop-blur-sm hover:bg-white/10`}
-              onClick={() => {
-                stopActiveGame()
-              }}
-            >
-              Avsluta
-            </button>
+          <div className="pointer-events-none fixed inset-x-0 top-0 z-[60] flex items-center justify-center p-3">
+            <div className="pointer-events-auto flex items-center gap-3 rounded-full border border-white/20 bg-black/65 px-3 py-2 backdrop-blur-md shadow-[0_8px_28px_rgba(0,0,0,0.55)]">
+              <button
+                type="button"
+                className={`${cardButtonClass} border border-white/30 bg-white/10 text-white hover:bg-white/20`}
+                onClick={() => {
+                  stopActiveGame()
+                }}
+              >
+                Avsluta spel
+              </button>
+              <span className="text-[0.58rem] uppercase tracking-[0.2em] text-white/70 whitespace-nowrap">
+                Esc eller Select + Start
+              </span>
+            </div>
           </div>
           <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-[0.6rem] uppercase tracking-widest text-white/30">
             Esc eller Select + Start · Avsluta

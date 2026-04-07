@@ -477,6 +477,38 @@ export function setGameCover(gameId: string, coverUrl: string | null): Lumioplay
   }))
 }
 
+export function setGameCoversBatch(updates: Array<{ gameId: string; coverUrl: string | null }>): LumioplayGame[] {
+  if (updates.length === 0) return getStoredGames()
+  const updateMap = new Map<string, string | null>()
+  for (const entry of updates) {
+    if (!entry.gameId) continue
+    updateMap.set(entry.gameId, entry.coverUrl ?? null)
+  }
+  if (updateMap.size === 0) return getStoredGames()
+
+  const library = getLibrary()
+  return setLibrary({
+    ...library,
+    games: library.games.map((game) => {
+      if (!updateMap.has(game.id)) return game
+      const coverUrl = updateMap.get(game.id) ?? null
+      return {
+        ...game,
+        coverUrl,
+        artworkStatus: coverUrl ? 'resolved' : 'missing',
+        metadata: {
+          ...game.metadata,
+          displayTitle: game.metadata?.displayTitle ?? game.title,
+          sortTitle: game.metadata?.sortTitle ?? game.title.toLowerCase(),
+          searchTitle: game.metadata?.searchTitle ?? `${game.title} ${game.fileName}`.toLowerCase(),
+          coverUrl,
+          coverCandidates: game.metadata?.coverCandidates ?? [],
+        },
+      }
+    }),
+  }).games
+}
+
 export function markGameLaunched(gameId: string): LumioplayGame[] {
   return updateGame(gameId, (game) => ({
     ...game,

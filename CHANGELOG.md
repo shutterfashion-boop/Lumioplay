@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.17
+
+- Made the in-game exit control persistent in a fixed top overlay so it is always visible above gameplay
+- Added safe poster sync with strict limits: manual trigger, capped concurrency, timeout per request, batched storage writes
+- Added lightweight auto poster sync only for newly imported/synced games (small capped batch, no startup full-library sweep)
+
 ## 0.3.16
 
 - Removed poster sync from the library flow to stabilize startup and folder import on desktop
