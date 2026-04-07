@@ -14,6 +14,8 @@ const KEY_GAMES = 'lumioplay_games'
 const KEY_ROM_FOLDERS = 'lumioplay_rom_folders'
 const KEY_RETROARCH_PATH = 'lumioplay_retroarch_path'
 const KEY_RETROARCH_CORES_PATH = 'lumioplay_retroarch_cores_path'
+const KEY_GAMEPAD_MAPPING = 'lumioplay_gamepad_mapping_v1'
+const KEY_GAMEPAD_EXIT_COMBO = 'lumioplay_gamepad_exit_combo_v1'
 
 const DEFAULT_SETTINGS: LumioplayLibrarySettings = {
   retroArchPath: '',
@@ -42,6 +44,38 @@ export const IMPORTABLE_ROM_EXTENSIONS = Array.from(
     ),
   ),
 )
+
+export const LUMIOPLAY_JOYPAD_BINDINGS: Array<{ index: number; label: string }> = [
+  { index: 0, label: 'B' },
+  { index: 1, label: 'Y' },
+  { index: 2, label: 'Select' },
+  { index: 3, label: 'Start' },
+  { index: 4, label: 'Up' },
+  { index: 5, label: 'Down' },
+  { index: 6, label: 'Left' },
+  { index: 7, label: 'Right' },
+  { index: 8, label: 'A' },
+  { index: 9, label: 'X' },
+  { index: 10, label: 'L' },
+  { index: 11, label: 'R' },
+]
+
+const DEFAULT_GAMEPAD_MAPPING: Record<number, number> = {
+  0: 1,   // B
+  1: 2,   // Y
+  2: 8,   // Select
+  3: 9,   // Start
+  4: 12,  // Up
+  5: 13,  // Down
+  6: 14,  // Left
+  7: 15,  // Right
+  8: 0,   // A
+  9: 3,   // X
+  10: 4,  // L
+  11: 5,  // R
+}
+
+const DEFAULT_GAMEPAD_EXIT_COMBO = [8, 9] // Select + Start
 
 function nowIso(): string {
   return new Date().toISOString()
@@ -519,4 +553,56 @@ export function setAutoSyncIntervalSeconds(value: number): void {
       autoSyncIntervalSeconds: Math.max(15, Math.min(300, Math.round(value))),
     },
   }))
+}
+
+function normalizeGamepadMapping(raw: unknown): Record<number, number> {
+  const next: Record<number, number> = { ...DEFAULT_GAMEPAD_MAPPING }
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return next
+
+  for (const binding of LUMIOPLAY_JOYPAD_BINDINGS) {
+    const value = Number((raw as Record<string, unknown>)[String(binding.index)])
+    if (Number.isFinite(value) && value >= 0) {
+      next[binding.index] = Math.floor(value)
+    }
+  }
+  return next
+}
+
+function normalizeExitCombo(raw: unknown): number[] {
+  if (!Array.isArray(raw)) return [...DEFAULT_GAMEPAD_EXIT_COMBO]
+  const values = raw
+    .map((value) => Number(value))
+    .filter((value) => Number.isFinite(value) && value >= 0)
+    .map((value) => Math.floor(value))
+  return values.length > 0 ? Array.from(new Set(values)).slice(0, 4) : [...DEFAULT_GAMEPAD_EXIT_COMBO]
+}
+
+export function getGamepadMapping(): Record<number, number> {
+  try {
+    const raw = getScopedStorageItem(KEY_GAMEPAD_MAPPING)
+    if (!raw) return { ...DEFAULT_GAMEPAD_MAPPING }
+    return normalizeGamepadMapping(JSON.parse(raw) as unknown)
+  } catch {
+    return { ...DEFAULT_GAMEPAD_MAPPING }
+  }
+}
+
+export function setGamepadMapping(mapping: Record<number, number>): void {
+  const normalized = normalizeGamepadMapping(mapping)
+  setScopedStorageItem(KEY_GAMEPAD_MAPPING, JSON.stringify(normalized))
+}
+
+export function getGamepadExitCombo(): number[] {
+  try {
+    const raw = getScopedStorageItem(KEY_GAMEPAD_EXIT_COMBO)
+    if (!raw) return [...DEFAULT_GAMEPAD_EXIT_COMBO]
+    return normalizeExitCombo(JSON.parse(raw) as unknown)
+  } catch {
+    return [...DEFAULT_GAMEPAD_EXIT_COMBO]
+  }
+}
+
+export function setGamepadExitCombo(combo: number[]): void {
+  const normalized = normalizeExitCombo(combo)
+  setScopedStorageItem(KEY_GAMEPAD_EXIT_COMBO, JSON.stringify(normalized))
 }

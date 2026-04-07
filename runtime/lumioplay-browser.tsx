@@ -14,6 +14,8 @@ import {
   getAutoSyncIntervalSeconds,
   getEffectiveCoreId,
   getEffectivePlatform,
+  getGamepadExitCombo,
+  getGamepadMapping,
   getRomFolders,
   getStoredGames,
   IMPORTABLE_ROM_EXTENSIONS,
@@ -398,12 +400,13 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const [syncing, setSyncing] = useState(false)
   const [desktopReady, setDesktopReady] = useState(false)
   const [gameActive, setGameActive] = useState(false)
-  const [gamePaused, setGamePaused] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
   const gameContainerRef = useRef<HTMLDivElement | null>(null)
   const syncInFlightRef = useRef(false)
-  const buttonStateRef = useRef<boolean[]>(Array(JOYPAD_BUTTON_COUNT).fill(false))
+  const keyboardStateRef = useRef<boolean[]>(Array(JOYPAD_BUTTON_COUNT).fill(false))
+  const gamepadStateRef = useRef<boolean[]>(Array(JOYPAD_BUTTON_COUNT).fill(false))
+  const lastSentStateRef = useRef<boolean[]>(Array(JOYPAD_BUTTON_COUNT).fill(false))
   const savedFolders = getRomFolders()
   const autoSyncEnabled = getAutoSyncEnabled()
   const autoSyncIntervalSeconds = getAutoSyncIntervalSeconds()
@@ -412,35 +415,50 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     setDesktopReady(isPluginDesktopHost())
   }, [])
 
+  function mergeInputStates(): boolean[] {
+    return Array.from({ length: JOYPAD_BUTTON_COUNT }, (_, index) => {
+      return Boolean(keyboardStateRef.current[index] || gamepadStateRef.current[index])
+    })
+  }
+
+  function pushInputState() {
+    const merged = mergeInputStates()
+    const changed = merged.some((pressed, index) => pressed !== lastSentStateRef.current[index])
+    if (!changed) return
+    lastSentStateRef.current = merged
+    void sendLibretroInput([...merged])
+  }
+
+  function stopActiveGame() {
+    void stopLibretroGame()
+    keyboardStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+    gamepadStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+    lastSentStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+    void sendLibretroInput(Array(JOYPAD_BUTTON_COUNT).fill(false))
+    setGameActive(false)
+  }
+
   useEffect(() => {
     if (!gameActive) return
-
-    function updateInput() {
-      void sendLibretroInput([...buttonStateRef.current])
-    }
 
     function onKeyDown(event: KeyboardEvent) {
       event.preventDefault()
       if (event.code === 'Escape') {
-        buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
-        void sendLibretroInput([...buttonStateRef.current])
-        void stopLibretroGame()
-        setGameActive(false)
-        setGamePaused(false)
+        stopActiveGame()
         return
       }
       const index = KEYBOARD_TO_JOYPAD[event.code]
-      if (index !== undefined && !buttonStateRef.current[index]) {
-        buttonStateRef.current[index] = true
-        updateInput()
+      if (index !== undefined && !keyboardStateRef.current[index]) {
+        keyboardStateRef.current[index] = true
+        pushInputState()
       }
     }
 
     function onKeyUp(event: KeyboardEvent) {
       const index = KEYBOARD_TO_JOYPAD[event.code]
-      if (index !== undefined && buttonStateRef.current[index]) {
-        buttonStateRef.current[index] = false
-        updateInput()
+      if (index !== undefined && keyboardStateRef.current[index]) {
+        keyboardStateRef.current[index] = false
+        pushInputState()
       }
     }
 
@@ -448,10 +466,58 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     window.addEventListener('keyup', onKeyUp)
     gameContainerRef.current?.focus()
     return () => {
-      buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
-      void sendLibretroInput([...buttonStateRef.current])
+      keyboardStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
       window.removeEventListener('keydown', onKeyDown)
       window.removeEventListener('keyup', onKeyUp)
+      pushInputState()
+    }
+  }, [gameActive])
+
+  useEffect(() => {
+    if (!gameActive) return
+    let rafId = 0
+    let comboHeld = false
+    const gamepadMapping = getGamepadMapping()
+    const exitCombo = getGamepadExitCombo()
+
+    function onFrame() {
+      const pad = navigator.getGamepads?.().find((entry) => Boolean(entry)) ?? null
+      const nextState = Array(JOYPAD_BUTTON_COUNT).fill(false)
+
+      if (pad) {
+        Object.entries(gamepadMapping).forEach(([joypadIndexRaw, gamepadButtonRaw]) => {
+          const joypadIndex = Number(joypadIndexRaw)
+          const gamepadButtonIndex = Number(gamepadButtonRaw)
+          if (!Number.isFinite(joypadIndex) || !Number.isFinite(gamepadButtonIndex)) return
+          if (joypadIndex < 0 || joypadIndex >= JOYPAD_BUTTON_COUNT || gamepadButtonIndex < 0) return
+          const pressed = Boolean(pad.buttons[gamepadButtonIndex]?.pressed)
+          nextState[joypadIndex] = pressed
+        })
+
+        const comboPressed =
+          exitCombo.length > 0 &&
+          exitCombo.every((buttonIndex) => Boolean(pad.buttons[buttonIndex]?.pressed))
+
+        if (comboPressed && !comboHeld) {
+          comboHeld = true
+          stopActiveGame()
+          return
+        }
+        if (!comboPressed) {
+          comboHeld = false
+        }
+      }
+
+      gamepadStateRef.current = nextState
+      pushInputState()
+      rafId = window.requestAnimationFrame(onFrame)
+    }
+
+    rafId = window.requestAnimationFrame(onFrame)
+    return () => {
+      if (rafId) window.cancelAnimationFrame(rafId)
+      gamepadStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+      pushInputState()
     }
   }, [gameActive])
 
@@ -459,8 +525,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     if (!gameActive) return
     const unlisten = onLibretroStopped(() => {
       setGameActive(false)
-      setGamePaused(false)
-      buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+      keyboardStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+      gamepadStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+      lastSentStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
     })
     return unlisten
   }, [gameActive])
@@ -638,8 +705,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
         const updated = markGameLaunched(game.id)
         setGames(updated)
         setGameActive(true)
-        setGamePaused(false)
-        buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+        keyboardStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+        gamepadStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+        lastSentStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
         setStatusMessage(`Startade ${getGameDisplayTitle(game)} i Lumio.`)
       } else if (canLaunchGame(game)) {
         await launchGameWithRetroArch(game)
@@ -819,18 +887,14 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
               type="button"
               className={`${cardButtonClass} border bg-black/60 text-white backdrop-blur-sm hover:bg-white/10`}
               onClick={() => {
-                void stopLibretroGame()
-                buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
-                void sendLibretroInput([...buttonStateRef.current])
-                setGameActive(false)
-                setGamePaused(false)
+                stopActiveGame()
               }}
             >
               Avsluta
             </button>
           </div>
           <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-[0.6rem] uppercase tracking-widest text-white/30">
-            Esc · Avsluta
+            Esc eller Select + Start · Avsluta
           </div>
         </div>
       )}
