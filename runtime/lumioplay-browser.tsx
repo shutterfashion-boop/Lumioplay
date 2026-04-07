@@ -29,7 +29,13 @@ import {
 } from './lumioplay-storage'
 import {
   canLaunchGame,
+  canLaunchLibretro,
   launchGameWithRetroArch,
+  launchLibretroGameEmbedded,
+  onLibretroStopped,
+  sendLibretroInput,
+  setLibretroBounds,
+  stopLibretroGame,
 } from './lumioplay-launcher'
 import type { BrowsePageProps } from '@/lib/plugin-sdk'
 import type { LumioplayConsoleId, LumioplayGame, LumioplayPlatformId } from './lumioplay-types'
@@ -40,6 +46,21 @@ const activePillClass =
   'border-accent-400/50 bg-accent-400/10 text-accent-300'
 const cardButtonClass =
   'flex h-9 items-center rounded-full border px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all'
+const KEYBOARD_TO_JOYPAD: Record<string, number> = {
+  KeyZ: 0,
+  KeyA: 1,
+  ShiftRight: 2,
+  Enter: 3,
+  ArrowUp: 4,
+  ArrowDown: 5,
+  ArrowLeft: 6,
+  ArrowRight: 7,
+  KeyX: 8,
+  KeyS: 9,
+  KeyQ: 10,
+  KeyW: 11,
+}
+const JOYPAD_BUTTON_COUNT = 16
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -371,9 +392,13 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const [editingGameId, setEditingGameId] = useState<string | null>(null)
   const [syncing, setSyncing] = useState(false)
   const [desktopReady, setDesktopReady] = useState(false)
+  const [gameActive, setGameActive] = useState(false)
+  const [gamePaused, setGamePaused] = useState(false)
   const uploadInputRef = useRef<HTMLInputElement | null>(null)
   const folderInputRef = useRef<HTMLInputElement | null>(null)
+  const gameContainerRef = useRef<HTMLDivElement | null>(null)
   const syncInFlightRef = useRef(false)
+  const buttonStateRef = useRef<boolean[]>(Array(JOYPAD_BUTTON_COUNT).fill(false))
   const savedFolders = getRomFolders()
   const autoSyncEnabled = getAutoSyncEnabled()
   const autoSyncIntervalSeconds = getAutoSyncIntervalSeconds()
@@ -381,6 +406,87 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   useEffect(() => {
     setDesktopReady(isPluginDesktopHost())
   }, [])
+
+  useEffect(() => {
+    if (!gameActive) return
+
+    function updateInput() {
+      void sendLibretroInput([...buttonStateRef.current])
+    }
+
+    function onKeyDown(event: KeyboardEvent) {
+      event.preventDefault()
+      if (event.code === 'Escape') {
+        buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+        void sendLibretroInput([...buttonStateRef.current])
+        void stopLibretroGame()
+        setGameActive(false)
+        setGamePaused(false)
+        return
+      }
+      const index = KEYBOARD_TO_JOYPAD[event.code]
+      if (index !== undefined && !buttonStateRef.current[index]) {
+        buttonStateRef.current[index] = true
+        updateInput()
+      }
+    }
+
+    function onKeyUp(event: KeyboardEvent) {
+      const index = KEYBOARD_TO_JOYPAD[event.code]
+      if (index !== undefined && buttonStateRef.current[index]) {
+        buttonStateRef.current[index] = false
+        updateInput()
+      }
+    }
+
+    window.addEventListener('keydown', onKeyDown)
+    window.addEventListener('keyup', onKeyUp)
+    gameContainerRef.current?.focus()
+    return () => {
+      buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+      void sendLibretroInput([...buttonStateRef.current])
+      window.removeEventListener('keydown', onKeyDown)
+      window.removeEventListener('keyup', onKeyUp)
+    }
+  }, [gameActive])
+
+  useEffect(() => {
+    if (!gameActive) return
+    const unlisten = onLibretroStopped(() => {
+      setGameActive(false)
+      setGamePaused(false)
+      buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+    })
+    return unlisten
+  }, [gameActive])
+
+  useEffect(() => {
+    if (!gameActive || !gameContainerRef.current) return
+
+    function syncBounds() {
+      const element = gameContainerRef.current
+      if (!element) return
+      const rect = element.getBoundingClientRect()
+      void setLibretroBounds(
+        rect.left,
+        rect.top,
+        rect.width,
+        rect.height,
+        window.innerHeight,
+        window.devicePixelRatio,
+      )
+    }
+
+    syncBounds()
+    gameContainerRef.current.focus()
+    const resizeObserver = new ResizeObserver(syncBounds)
+    resizeObserver.observe(gameContainerRef.current)
+    window.addEventListener('resize', syncBounds)
+    return () => {
+      resizeObserver.disconnect()
+      window.removeEventListener('resize', syncBounds)
+    }
+  }, [gameActive])
   const availablePlatformIds = Array.from(new Set(games.map((game) => getEffectivePlatform(game))))
   const resolvedPlatform =
     platform !== 'all' && availablePlatformIds.includes(platform as LumioplayConsoleId)
@@ -521,12 +627,22 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   async function handleLaunch(game: LumioplayGame) {
     setLaunchState({ gameId: game.id, message: null })
     try {
-      await launchGameWithRetroArch(game)
-      const updated = markGameLaunched(game.id)
-      setGames(updated)
-      setStatusMessage(`Startade ${getGameDisplayTitle(game)} i RetroArch.`)
+      if (canLaunchLibretro(game)) {
+        await launchLibretroGameEmbedded(game)
+        const updated = markGameLaunched(game.id)
+        setGames(updated)
+        setGameActive(true)
+        setGamePaused(false)
+        buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+        setStatusMessage(`Startade ${getGameDisplayTitle(game)} i Lumio.`)
+      } else if (canLaunchGame(game)) {
+        await launchGameWithRetroArch(game)
+        const updated = markGameLaunched(game.id)
+        setGames(updated)
+        setStatusMessage(`Startade ${getGameDisplayTitle(game)} i RetroArch.`)
+      }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'RetroArch kunde inte startas.'
+      const message = error instanceof Error ? error.message : 'Spelet kunde inte startas.'
       setLaunchState({ gameId: null, message })
       setStatusMessage(message)
       return
@@ -669,6 +785,33 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
         onChange={(event) => handleFilesSelected(event.target.files, 'folder')}
         {...({ webkitdirectory: '', directory: '' } as Record<string, string>)}
       />
+      {gameActive && (
+        <div
+          ref={gameContainerRef}
+          className="fixed inset-0 z-50 bg-black"
+          tabIndex={-1}
+          style={{ outline: 'none' }}
+        >
+          <div className="absolute right-4 top-4 flex items-center gap-2">
+            <button
+              type="button"
+              className={`${cardButtonClass} border bg-black/60 text-white backdrop-blur-sm hover:bg-white/10`}
+              onClick={() => {
+                void stopLibretroGame()
+                buttonStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
+                void sendLibretroInput([...buttonStateRef.current])
+                setGameActive(false)
+                setGamePaused(false)
+              }}
+            >
+              Avsluta
+            </button>
+          </div>
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 text-[0.6rem] uppercase tracking-widest text-white/30">
+            Esc · Avsluta
+          </div>
+        </div>
+      )}
     </div>
   )
 }
