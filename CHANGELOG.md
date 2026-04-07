@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.16
+
+- Removed poster sync from the library flow to stabilize startup and folder import on desktop
+- Removed remote libretro cover candidate generation from metadata (no background cover fetch/load)
+- Kept ROM import, folder sync, launch, and controller mapping/exit combo intact
+
 ## 0.3.15
 
 - Added controller mapping settings so gamepad button indices can be customized per libretro button

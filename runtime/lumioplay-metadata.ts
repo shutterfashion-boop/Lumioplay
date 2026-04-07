@@ -98,11 +98,11 @@ export function buildCoverCandidates(platform: LumioplayConsoleId, title: string
   })
 }
 
-export function buildMetadataFromFileName(fileName: string, platform: LumioplayConsoleId): LumioplayGameMetadata {
+export function buildMetadataFromFileName(fileName: string, _platform: LumioplayConsoleId): LumioplayGameMetadata {
   const basename = fileName.replace(/\.[^/.]+$/, '')
   const cleanedTitle = trimNoiseTokens(basename)
   const displayTitle = cleanedTitle || basename
-  const coverCandidates = buildCoverCandidates(platform, displayTitle)
+  const coverCandidates: string[] = []
   return {
     displayTitle,
     sortTitle: createSortTitle(displayTitle),
@@ -110,7 +110,7 @@ export function buildMetadataFromFileName(fileName: string, platform: LumioplayC
     releaseYear: extractReleaseYear(fileName),
     region: extractRegion(fileName),
     tags: [],
-    coverUrl: coverCandidates[0] ?? null,
+    coverUrl: null,
     coverCandidates,
   }
 }

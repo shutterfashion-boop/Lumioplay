@@ -57,10 +57,15 @@ export function LumioplaySettingsSection() {
   }
 
   async function handlePickCoresFolder() {
-    const picked = await pickPluginFolder()
-    if (!picked) return
-    setRetroArchCoresPathState(picked)
-    setStatusMessage('Libretro core-mappen uppdaterades.')
+    try {
+      const picked = await pickPluginFolder()
+      if (!picked) return
+      setRetroArchCoresPathState(picked)
+      setStatusMessage('Libretro core-mappen uppdaterades.')
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Kunde inte välja mapp.'
+      setStatusMessage(message)
+    }
   }
 
   return (

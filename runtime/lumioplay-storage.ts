@@ -21,7 +21,7 @@ const DEFAULT_SETTINGS: LumioplayLibrarySettings = {
   retroArchPath: '',
   retroArchCoresPath: '',
   romFolders: [],
-  autoSyncEnabled: true,
+  autoSyncEnabled: false,
   autoSyncIntervalSeconds: 45,
 }
 

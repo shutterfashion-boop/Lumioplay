@@ -7,7 +7,7 @@ import {
   pickPluginFolder,
   scanPluginDirectory,
 } from '@/lib/plugin-sdk'
-import { getGameDisplayTitle, resolveFirstReachableCoverUrl } from './lumioplay-metadata'
+import { getGameDisplayTitle } from './lumioplay-metadata'
 import {
   createImportedGame,
   getAutoSyncEnabled,
@@ -22,7 +22,6 @@ import {
   LUMIOPLAY_PLATFORMS,
   markGameLaunched,
   setGameCoreOverride,
-  setGameCover,
   setGamePlatformOverride,
   setRomFolders,
   syncFolderGames,
@@ -159,20 +158,16 @@ function LibraryToolbar({
   onUploadRoms,
   onChooseFolder,
   onRescanFolders,
-  onSyncPosters,
   desktopReady,
   hasSavedFolders,
   syncing,
-  syncingPosters,
 }: {
   onUploadRoms: () => void
   onChooseFolder: () => void
   onRescanFolders: () => void
-  onSyncPosters: () => void
   desktopReady: boolean
   hasSavedFolders: boolean
   syncing: boolean
-  syncingPosters: boolean
 }) {
   return (
     <div className="flex flex-wrap gap-3">
@@ -199,14 +194,6 @@ function LibraryToolbar({
           {syncing ? 'Synkar...' : 'Synka nu'}
         </button>
       ) : null}
-      <button
-        type="button"
-        onClick={onSyncPosters}
-        disabled={syncingPosters}
-        className={`${cardButtonClass} ${syncingPosters ? activePillClass : neutralPillClass}`}
-      >
-        {syncingPosters ? 'Hämtar posters...' : 'Synka posters'}
-      </button>
     </div>
   )
 }
@@ -671,12 +658,17 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   }
 
   async function handleNativeFolderPick() {
-    const folder = await pickPluginFolder()
-    if (!folder) return
-    const existingFolders = new Set(getRomFolders())
-    existingFolders.add(folder)
-    setRomFolders(Array.from(existingFolders))
-    await importIndexedDirectory(folder)
+    try {
+      const folder = await pickPluginFolder()
+      if (!folder) return
+      const existingFolders = new Set(getRomFolders())
+      existingFolders.add(folder)
+      setRomFolders(Array.from(existingFolders))
+      await importIndexedDirectory(folder)
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Kunde inte lägga till ROM-mapp.'
+      setStatusMessage(message)
+    }
   }
 
   function handleFilesSelected(fileList: FileList | null, source: 'upload' | 'folder') {
@@ -753,47 +745,6 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     }
   }, [desktopReady, autoSyncEnabled, autoSyncIntervalSeconds, savedFolders.join('|')])
 
-  const [syncingPosters, setSyncingPosters] = useState(false)
-  const posterSyncCancelRef = useRef(false)
-
-  async function syncAllPosters(force = false) {
-    if (syncingPosters) return
-    const gamesNeedingCover = getStoredGames().filter(
-      (game) => (force || (game.artworkStatus !== 'missing' && !game.coverUrl)) && game.metadata?.coverCandidates?.length,
-    )
-    if (gamesNeedingCover.length === 0) {
-      setStatusMessage('Inga fler posters att hämta just nu.')
-      return
-    }
-    posterSyncCancelRef.current = false
-    setSyncingPosters(true)
-    let resolvedCount = 0
-    try {
-      for (const game of gamesNeedingCover) {
-        if (posterSyncCancelRef.current) break
-        const resolvedCover = await resolveFirstReachableCoverUrl(game.metadata?.coverCandidates ?? [])
-        setGameCover(game.id, resolvedCover)
-        if (resolvedCover) resolvedCount += 1
-      }
-      refreshGames()
-      setStatusMessage(
-        resolvedCount > 0
-          ? `${resolvedCount} posters uppdaterades.`
-          : 'Hittade inga nya posters för spelen i biblioteket.',
-      )
-    } finally {
-      setSyncingPosters(false)
-    }
-  }
-
-  useEffect(() => {
-    void syncAllPosters(false)
-    return () => {
-      posterSyncCancelRef.current = true
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   return (
     <div className="space-y-5">
       <div className="space-y-4">
@@ -819,11 +770,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           onRescanFolders={() => {
             void syncSavedFolders(false)
           }}
-          onSyncPosters={() => void syncAllPosters(true)}
           desktopReady={desktopReady}
           hasSavedFolders={savedFolders.length > 0}
           syncing={syncing}
-          syncingPosters={syncingPosters}
         />
         <div className="flex flex-wrap items-center gap-3">
           <input
