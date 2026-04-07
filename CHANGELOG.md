@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.6
+
+- Fixed embedded libretro compositing so the game surface shows through the Lumio webview instead of appearing behind it
+- Refreshed legacy game metadata during sync so older libraries can resolve poster candidates again
+- Removed rounded corners from game posters to match the flatter library card look
+
 ## 0.3.5
 
 - Fixed embedded libretro overlay so the game view is no longer covered by an opaque black layer

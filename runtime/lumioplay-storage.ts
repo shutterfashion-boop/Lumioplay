@@ -3,6 +3,7 @@ import { buildMetadataFromFileName } from './lumioplay-metadata'
 import type {
   LumioplayConsoleId,
   LumioplayGame,
+  LumioplayGameMetadata,
   LumioplayLibraryDatabase,
   LumioplayLibrarySettings,
   LumioplayPlatformDefinition,
@@ -103,27 +104,60 @@ function buildGameId(sourcePath: string, fileName: string): string {
   return seed.replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
 }
 
+function normalizeGameMetadata(game: {
+  fileName: string
+  platform: LumioplayConsoleId
+  platformOverride?: LumioplayConsoleId | null
+  title: string
+  coverUrl?: string | null
+  metadata?: Partial<LumioplayGameMetadata> | null
+}): LumioplayGame['metadata'] {
+  const effectivePlatform = game.platformOverride ?? game.platform
+  const baseMetadata = buildMetadataFromFileName(game.fileName, effectivePlatform)
+  const existingMetadata = game.metadata ?? null
+
+  const normalizedMetadata: LumioplayGameMetadata = {
+    displayTitle: existingMetadata?.displayTitle?.trim() || baseMetadata.displayTitle || game.title,
+    sortTitle: existingMetadata?.sortTitle?.trim() || baseMetadata.sortTitle,
+    searchTitle: existingMetadata?.searchTitle?.trim() || baseMetadata.searchTitle,
+    releaseYear: existingMetadata?.releaseYear ?? baseMetadata.releaseYear ?? null,
+    region: existingMetadata?.region ?? baseMetadata.region ?? null,
+    tags: Array.isArray(existingMetadata?.tags) ? existingMetadata.tags : (baseMetadata.tags ?? []),
+    coverUrl: game.coverUrl ?? existingMetadata?.coverUrl ?? baseMetadata.coverUrl ?? null,
+    coverCandidates:
+      Array.isArray(existingMetadata?.coverCandidates) && existingMetadata.coverCandidates.length > 0
+        ? existingMetadata.coverCandidates
+        : (baseMetadata.coverCandidates ?? []),
+  }
+  return normalizedMetadata
+}
+
 function mergeImportedGameWithExisting(nextGame: LumioplayGame, existing?: LumioplayGame): LumioplayGame {
   if (!existing) return nextGame
-  const baseMetadata = nextGame.metadata ?? buildMetadataFromFileName(nextGame.fileName, nextGame.platform)
+  const mergedCoverUrl = existing.coverUrl ?? nextGame.coverUrl ?? null
   return {
     ...existing,
     ...nextGame,
     title: nextGame.title,
-    coverUrl: existing.coverUrl ?? nextGame.coverUrl ?? null,
+    coverUrl: mergedCoverUrl,
     favorite: existing.favorite ?? false,
     platformOverride: existing.platformOverride ?? null,
     coreOverride: existing.coreOverride ?? null,
     importedAt: existing.importedAt ?? nextGame.importedAt,
     playCount: existing.playCount ?? 0,
     lastPlayedAt: existing.lastPlayedAt ?? null,
-    metadata: {
-      ...baseMetadata,
-      coverCandidates: baseMetadata.coverCandidates ?? [],
-      coverUrl: existing.coverUrl ?? null,
-    },
+    metadata: normalizeGameMetadata({
+      ...nextGame,
+      platformOverride: existing.platformOverride ?? nextGame.platformOverride ?? null,
+      title: nextGame.title,
+      coverUrl: mergedCoverUrl,
+      metadata: {
+        ...(existing.metadata ?? {}),
+        ...(nextGame.metadata ?? {}),
+      },
+    }),
     missing: false,
-    artworkStatus: existing.artworkStatus ?? (existing.coverUrl ? 'resolved' : 'idle'),
+    artworkStatus: existing.artworkStatus ?? (mergedCoverUrl ? 'resolved' : 'idle'),
     lastIndexedAt: nowIso(),
   }
 }
@@ -161,7 +195,12 @@ function migrateLegacyLibrary(): LumioplayLibraryDatabase {
         missing: false,
         artworkStatus: game.coverUrl ? 'resolved' : 'idle',
         lastIndexedAt: game.importedAt ?? nowIso(),
-        metadata: game.metadata ?? buildMetadataFromFileName(game.fileName, game.platform),
+        metadata: normalizeGameMetadata({
+          ...game,
+          title: game.title,
+          platformOverride: null,
+          coverUrl: game.coverUrl ?? null,
+        }),
         coverUrl: game.coverUrl ?? null,
       })),
     ),
@@ -186,18 +225,26 @@ export function getLibrary(): LumioplayLibraryDatabase {
           if (typeof game.romPath !== 'string' || !game.romPath.trim()) return false
           return detectPlatformByFileName(game.fileName) != null
         })
-        .map((game) => ({
-          ...game,
-          favorite: game.favorite ?? false,
-          missing: game.missing ?? false,
-          artworkStatus: game.artworkStatus ?? (game.coverUrl ? 'resolved' : 'idle'),
-          coreOverride: game.coreOverride ?? null,
-          platformOverride: game.platformOverride ?? null,
-          sourceFolder: game.sourceFolder ?? null,
-          lastIndexedAt: game.lastIndexedAt ?? game.importedAt ?? null,
-          metadata: game.metadata ?? buildMetadataFromFileName(game.fileName, game.platform),
-          coverUrl: game.coverUrl ?? null,
-        }))
+        .map((game) => {
+          const normalizedGame: LumioplayGame = {
+            ...game,
+            favorite: game.favorite ?? false,
+            missing: game.missing ?? false,
+            artworkStatus: game.artworkStatus ?? (game.coverUrl ? 'resolved' : 'idle'),
+            coreOverride: game.coreOverride ?? null,
+            platformOverride: game.platformOverride ?? null,
+            sourceFolder: game.sourceFolder ?? null,
+            lastIndexedAt: game.lastIndexedAt ?? game.importedAt ?? null,
+            coverUrl: game.coverUrl ?? null,
+          }
+          return {
+            ...normalizedGame,
+            metadata: normalizeGameMetadata({
+              ...normalizedGame,
+              title: normalizedGame.title,
+            }),
+          }
+        })
       return {
         version: 2,
         games: normalizeGames(normalizedGames),
@@ -354,18 +401,21 @@ export function toggleFavorite(gameId: string): LumioplayGame[] {
 export function setGamePlatformOverride(gameId: string, platformOverride: LumioplayConsoleId | null): LumioplayGame[] {
   return updateGame(gameId, (game) => {
     const nextPlatform = platformOverride ?? game.platform
-    const nextMetadata = buildMetadataFromFileName(game.fileName, nextPlatform)
     return {
       ...game,
       platformOverride,
       coverUrl: null,
       artworkStatus: 'idle',
-      metadata: {
-        ...nextMetadata,
-        ...game.metadata,
-        coverCandidates: nextMetadata.coverCandidates,
+      metadata: normalizeGameMetadata({
+        ...game,
+        platformOverride,
         coverUrl: null,
-      },
+        metadata: {
+          ...(game.metadata ?? {}),
+          coverUrl: null,
+          coverCandidates: buildMetadataFromFileName(game.fileName, nextPlatform).coverCandidates,
+        },
+      }),
     }
   })
 }

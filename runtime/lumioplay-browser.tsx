@@ -275,7 +275,7 @@ function GamesGrid({
             key={game.id}
             className={`group w-full cursor-pointer bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${game.missing ? 'opacity-70' : ''}`}
           >
-            <div className="relative aspect-[2/3] overflow-hidden rounded-2xl bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
+            <div className="relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
               {displayCoverUrl ? (
                 <img
                   src={displayCoverUrl}
