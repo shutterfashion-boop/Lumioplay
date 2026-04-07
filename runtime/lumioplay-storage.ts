@@ -56,11 +56,25 @@ function createEmptyLibrary(): LumioplayLibraryDatabase {
   }
 }
 
+function parseJsonSafely<T>(raw: string | null): T | null {
+  if (!raw) return null
+  try {
+    return JSON.parse(raw) as T
+  } catch {
+    return null
+  }
+}
+
+function asStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return []
+  return value.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+}
+
 function normalizeLibrarySettings(value?: Partial<LumioplayLibrarySettings> | null): LumioplayLibrarySettings {
   return {
     retroArchPath: value?.retroArchPath?.trim() ?? DEFAULT_SETTINGS.retroArchPath,
     retroArchCoresPath: value?.retroArchCoresPath?.trim() ?? DEFAULT_SETTINGS.retroArchCoresPath,
-    romFolders: Array.isArray(value?.romFolders) ? value!.romFolders.filter(Boolean) : DEFAULT_SETTINGS.romFolders,
+    romFolders: asStringArray(value?.romFolders),
     autoSyncEnabled: value?.autoSyncEnabled ?? DEFAULT_SETTINGS.autoSyncEnabled,
     autoSyncIntervalSeconds: Math.max(15, Math.min(300, Number(value?.autoSyncIntervalSeconds ?? DEFAULT_SETTINGS.autoSyncIntervalSeconds))),
   }
@@ -178,8 +192,10 @@ function migrateLegacyLibrary(): LumioplayLibraryDatabase {
   const retroArchPath = getScopedStorageItem(KEY_RETROARCH_PATH) ?? ''
   const retroArchCoresPath = getScopedStorageItem(KEY_RETROARCH_CORES_PATH) ?? ''
 
-  const games = rawGames ? (JSON.parse(rawGames) as LumioplayGame[]) : []
-  const romFolders = rawFolders ? (JSON.parse(rawFolders) as string[]) : []
+  const games = parseJsonSafely<unknown[]>(rawGames)
+    ?.filter((game): game is LumioplayGame => Boolean(game && typeof game === 'object'))
+    ?? []
+  const romFolders = asStringArray(parseJsonSafely<unknown>(rawFolders))
 
   return {
     version: 2,
@@ -217,8 +233,12 @@ export function getLibrary(): LumioplayLibraryDatabase {
   try {
     const raw = getScopedStorageItem(KEY_LIBRARY)
     if (raw) {
-      const parsed = JSON.parse(raw) as Partial<LumioplayLibraryDatabase>
-      const normalizedGames = (parsed.games ?? [])
+      const parsed = parseJsonSafely<Partial<LumioplayLibraryDatabase>>(raw)
+      if (!parsed || typeof parsed !== 'object') {
+        return createEmptyLibrary()
+      }
+      const parsedGames = Array.isArray(parsed.games) ? parsed.games : []
+      const normalizedGames = parsedGames
         .filter((game): game is LumioplayGame => {
           if (!game || typeof game !== 'object') return false
           if (typeof game.fileName !== 'string' || !game.fileName.trim()) return false
