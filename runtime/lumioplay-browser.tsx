@@ -69,8 +69,8 @@ const JOYPAD_BUTTON_COUNT = 16
 const POSTER_SYNC_CONCURRENCY = 3
 const POSTER_SYNC_BATCH_SIZE = 20
 const POSTER_SYNC_AUTO_LIMIT = 10
-const POSTER_SYNC_MISS_CACHE_KEY = 'lumioplay_poster_miss_cache_v1'
-const POSTER_SYNC_MISS_TTL_MS = 6 * 60 * 60 * 1000
+const POSTER_SYNC_MISS_CACHE_KEY = 'lumioplay_poster_miss_cache_v2'
+const POSTER_SYNC_MISS_TTL_MS = 45 * 60 * 1000
 const POSTER_SYNC_MAX_MISS_ENTRIES = 2500
 const POSTER_INDEX_CACHE_TTL_MS = 24 * 60 * 60 * 1000
 
@@ -118,15 +118,49 @@ const SYSTEM_NAME_BY_PLATFORM: Record<LumioplayConsoleId, string> = {
 }
 
 function normalizePosterLookupValue(value: string): string {
-  return value
+  const normalized = value
     .toLowerCase()
     .replace(/%[0-9a-f]{2}/gi, '')
     .replace(/\.png$/i, '')
+    .replace(/\bg\.?\s*i\.?\b/gi, ' gi ')
+    .replace(/\bm\.?\s*s\.?\b/gi, ' ms ')
+    .replace(/\bjr\.\b/gi, ' jr ')
+    .replace(/\s*&\s*/g, ' and ')
     .replace(/\([^)]*\)/g, ' ')
     .replace(/\[[^\]]*\]/g, ' ')
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
+  return normalized
+}
+
+function buildPosterLookupTokens(value: string): string[] {
+  const prioritizedShortTokens = new Set(['gi', 'ms', 'jr'])
+  return Array.from(
+    new Set(
+      normalizePosterLookupValue(value)
+        .split(' ')
+        .map((token) => token.trim())
+        .filter((token) => {
+          if (!token) return false
+          if (prioritizedShortTokens.has(token)) return true
+          return token.length > 2
+        }),
+    ),
+  )
+}
+
+function safeDecodePosterEntry(value: string): string {
+  const unescaped = value
+    .replace(/&amp;/gi, '&')
+    .replace(/&quot;/gi, '"')
+    .replace(/&#39;/gi, "'")
+    .replace(/&#x27;/gi, "'")
+  try {
+    return decodeURIComponent(unescaped)
+  } catch {
+    return unescaped
+  }
 }
 
 function getPreferredRegionTokens(region?: string | null): string[] {
@@ -684,8 +718,8 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
 
   function getPosterCandidates(game: LumioplayGame): string[] {
     const existing = Array.isArray(game.metadata?.coverCandidates) ? game.metadata?.coverCandidates ?? [] : []
-    if (existing.length > 0) return existing.slice(0, 12)
-    return buildCoverCandidates(getEffectivePlatform(game), getGameDisplayTitle(game), game.fileName).slice(0, 12)
+    const generated = buildCoverCandidates(getEffectivePlatform(game), getGameDisplayTitle(game), game.fileName)
+    return Array.from(new Set([...generated, ...existing])).slice(0, 48)
   }
 
   async function getPosterIndexEntries(platform: LumioplayConsoleId): Promise<string[]> {
@@ -704,7 +738,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const entries = Array.from(
       new Set(
         matches
-          .map((raw) => raw.replace(/^href="/i, '').replace(/"$/i, ''))
+          .map((raw) => safeDecodePosterEntry(raw.replace(/^href="/i, '').replace(/"$/i, '')))
           .filter(Boolean),
       ),
     )
@@ -713,7 +747,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   }
 
   function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
-    const decoded = decodeURIComponent(entry)
+    const decoded = safeDecodePosterEntry(entry)
     const normalizedEntry = normalizePosterLookupValue(decoded)
     if (!normalizedEntry) return -1000
 
@@ -721,10 +755,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
     const titleTokens = Array.from(
       new Set(
-        `${displayTitle} ${fileTitle}`
-          .split(' ')
-          .map((token) => token.trim())
-          .filter((token) => token.length > 2 && !['the', 'and', 'for', 'with'].includes(token)),
+        [...buildPosterLookupTokens(displayTitle), ...buildPosterLookupTokens(fileTitle)].filter(
+          (token) => !['the', 'and', 'for', 'with'].includes(token),
+        ),
       ),
     )
     if (titleTokens.length === 0) return -1000
@@ -751,31 +784,74 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     return score
   }
 
-  async function resolvePosterFromIndex(game: LumioplayGame): Promise<string | null> {
+  function clearMissCacheForGames(gamesToClear: LumioplayGame[]) {
+    if (gamesToClear.length === 0) return
+    const missMap = posterSyncMissCacheRef.current
+    if (missMap.size === 0) return
+    let changed = false
+
+    gamesToClear.forEach((game) => {
+      getPosterCandidates(game).forEach((url) => {
+        if (missMap.delete(url)) changed = true
+      })
+
+      const platform = getEffectivePlatform(game)
+      const systemName = SYSTEM_NAME_BY_PLATFORM[platform]
+      if (!systemName) return
+      const systemPath = `/${encodeURIComponent(systemName)}/Named_Boxarts/`
+      const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
+      const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
+      const probeTerms = Array.from(new Set([...buildPosterLookupTokens(displayTitle), ...buildPosterLookupTokens(fileTitle)]))
+
+      Array.from(missMap.keys()).forEach((url) => {
+        if (!url.includes(systemPath)) return
+        const entry = safeDecodePosterEntry((url.split('/').pop() ?? '').replace(/\.png$/i, ''))
+        const normalizedEntry = normalizePosterLookupValue(entry)
+        const matchesByTerm = probeTerms.length === 0 || probeTerms.some((term) => normalizedEntry.includes(term))
+        if (matchesByTerm && missMap.delete(url)) changed = true
+      })
+    })
+
+    if (changed) posterSyncMissCacheDirtyRef.current = true
+  }
+
+  async function resolvePosterFromIndex(game: LumioplayGame, options?: { forceRefresh?: boolean }): Promise<string | null> {
     const platform = getEffectivePlatform(game)
     const entries = await getPosterIndexEntries(platform)
     if (entries.length === 0) return null
 
     const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
     const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
-    const probeTerms = Array.from(
-      new Set(
-        `${displayTitle} ${fileTitle}`
-          .split(' ')
-          .map((token) => token.trim())
-          .filter((token) => token.length > 3),
-      ),
+    const probeTerms = Array.from(new Set([...buildPosterLookupTokens(displayTitle), ...buildPosterLookupTokens(fileTitle)]))
+    const strictLookupKeys = new Set(
+      [displayTitle, fileTitle]
+        .filter(Boolean)
+        .map((value) => value.replace(/\s+/g, ' ').trim()),
     )
+
+    const exactMatch = entries.find((entry) => {
+      const normalizedEntry = normalizePosterLookupValue(safeDecodePosterEntry(entry).replace(/\.png$/i, ''))
+      return normalizedEntry.length > 0 && strictLookupKeys.has(normalizedEntry)
+    })
+    if (exactMatch) {
+      const systemName = SYSTEM_NAME_BY_PLATFORM[platform]
+      const exactUrl = `https://thumbnails.libretro.com/${encodeURIComponent(systemName)}/Named_Boxarts/${exactMatch}`
+      if (options?.forceRefresh || !isMissCached(exactUrl)) {
+        const resolvedExact = await resolveFirstReachableCoverUrl([exactUrl], { timeoutMs: 2500, maxCandidates: 1 })
+        if (resolvedExact) return resolvedExact
+        markMissCached(exactUrl)
+      }
+    }
 
     const shortlist = entries
       .filter((entry) => {
-        const decoded = decodeURIComponent(entry).toLowerCase()
-        return probeTerms.length === 0 || probeTerms.some((term) => decoded.includes(term))
+        const normalizedEntry = normalizePosterLookupValue(safeDecodePosterEntry(entry))
+        return probeTerms.length === 0 || probeTerms.some((term) => normalizedEntry.includes(term))
       })
       .map((entry) => ({ entry, score: rankPosterEntryForGame(entry, game) }))
-      .filter((candidate) => candidate.score > 0)
+      .filter((candidate) => candidate.score > -8)
       .sort((left, right) => right.score - left.score)
-      .slice(0, 12)
+      .slice(0, 20)
 
     if (shortlist.length === 0) return null
 
@@ -783,28 +859,31 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const urls = shortlist.map(
       (candidate) => `https://thumbnails.libretro.com/${encodeURIComponent(systemName)}/Named_Boxarts/${candidate.entry}`,
     )
-    return resolveFirstReachableCoverUrl(urls, { timeoutMs: 2500, maxCandidates: 8 })
+    const filteredUrls = options?.forceRefresh ? urls : urls.filter((url) => !isMissCached(url))
+    if (filteredUrls.length === 0) return null
+    return resolveFirstReachableCoverUrl(filteredUrls, { timeoutMs: 2500, maxCandidates: 20 })
   }
 
-  async function resolvePosterCoverForGame(game: LumioplayGame): Promise<string | null> {
-    const candidates = getPosterCandidates(game).filter((url) => !isMissCached(url))
-    if (candidates.length > 0) {
-      const resolvedDirect = await resolveFirstReachableCoverUrl(candidates, { timeoutMs: 2500, maxCandidates: 10 })
+  async function resolvePosterCoverForGame(game: LumioplayGame, options?: { forceRefresh?: boolean }): Promise<string | null> {
+    const candidates = getPosterCandidates(game)
+    const allowedCandidates = options?.forceRefresh ? candidates : candidates.filter((url) => !isMissCached(url))
+    if (allowedCandidates.length > 0) {
+      const resolvedDirect = await resolveFirstReachableCoverUrl(allowedCandidates, { timeoutMs: 2500, maxCandidates: 24 })
       if (resolvedDirect) {
         clearMissCached(resolvedDirect)
         return resolvedDirect
       }
-      candidates.forEach((url) => markMissCached(url))
+      allowedCandidates.forEach((url) => markMissCached(url))
     }
 
-    const resolvedFromIndex = await resolvePosterFromIndex(game)
+    const resolvedFromIndex = await resolvePosterFromIndex(game, options)
     if (resolvedFromIndex) clearMissCached(resolvedFromIndex)
     return resolvedFromIndex
   }
 
   async function syncPostersForGames(
     sourceGames: LumioplayGame[],
-    options?: { limit?: number; silent?: boolean; onlyMissing?: boolean },
+    options?: { limit?: number; silent?: boolean; onlyMissing?: boolean; forceRefresh?: boolean },
   ): Promise<void> {
     if (posterSyncInFlightRef.current) return
     posterSyncInFlightRef.current = true
@@ -822,6 +901,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
       if (limited.length === 0) {
         if (!options?.silent) setStatusMessage('Inga spel saknar poster just nu.')
         return
+      }
+      if (options?.forceRefresh) {
+        clearMissCacheForGames(limited)
       }
 
       let resolvedCount = 0
@@ -846,7 +928,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           const chunkResults = await Promise.all(
             chunk.map(async (game) => ({
               gameId: game.id,
-              coverUrl: await resolvePosterCoverForGame(game).catch(() => null),
+              coverUrl: await resolvePosterCoverForGame(game, { forceRefresh: options?.forceRefresh }).catch(() => null),
             })),
           )
           chunkResults.forEach((result) => {
@@ -871,6 +953,8 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
         const unmatchedCount = Math.max(0, processedCount - resolvedCount)
         if (cancelled) {
           setStatusMessage(`Postersync avbröts (${resolvedCount}/${processedCount}). ${unmatchedCount} spel saknar matchande poster.`)
+        } else if (options?.forceRefresh) {
+          setStatusMessage(`Force-resync klar: ${resolvedCount}/${processedCount} posters uppdaterades. ${unmatchedCount} spel saknar matchande poster.`)
         } else {
           setStatusMessage(`${resolvedCount}/${processedCount} posters uppdaterades. ${unmatchedCount} spel saknar matchande poster.`)
         }
@@ -1112,7 +1196,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
               setStatusMessage('Avbryter postersync...')
               return
             }
-            void syncPostersForGames(getStoredGames(), { onlyMissing: true })
+            void syncPostersForGames(getStoredGames(), { onlyMissing: true, forceRefresh: true })
           }}
           desktopReady={desktopReady}
           hasSavedFolders={savedFolders.length > 0}

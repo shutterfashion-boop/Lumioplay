@@ -1,5 +1,47 @@
 # Changelog
 
+## 0.3.26
+
+- Added manual `force-resync` mode on `Synka posters` that ignores stale miss-cache entries for the current run
+- Added targeted miss-cache cleanup for the games being synced so previously missed NES titles can be retried deterministically
+- Added strict exact-title index match pass before scored fallback to improve hit-rate for stubborn poster misses
+
+## 0.3.25
+
+- Fixed HTML entity decoding for thumbnail index entries (`&amp;`, `&#39;`, etc.), improving match/fetch reliability for titles like `Track & Field`
+- Increased direct cover candidate probe window so clean title variants are less likely to be cut off for tricky ROM names
+- Increased index fallback probe depth (`maxCandidates`) to improve recovery for the last unmatched games
+
+## 0.3.24
+
+- Improved poster token matching for short but meaningful NES title tokens (`jr`, `ms`, `gi`) that were previously filtered out
+- Added stronger normalization for abbreviation-heavy titles (`G.I.`, `Ms.`, `Jr.`) to improve matches for games like `G.I. Joe`, `Ms. Pac-Man`, and `Donkey Kong Jr.`
+- Tuned index probe-term generation to use the same robust tokenization path as ranking, improving difficult-name lookup consistency
+
+## 0.3.23
+
+- Improved poster lookup robustness for tricky ROM names by regenerating fresh cover candidates at sync-time (while still keeping existing saved candidates)
+- Added safer thumbnail index decoding and normalized shortlist filtering so malformed index entries no longer break poster resolution for a game
+- Expanded title variant normalization (`Kung-Fu`/`Kung Fu`, revision suffix cleanup, stronger `Bros`/`Bros.` handling) to improve hit-rate for titles like `Super Mario Bros` and `Yie Ar Kung-Fu`
+
+## 0.3.22
+
+- Reordered poster title variants to prioritize canonical short names before subtitle-heavy ROM variants
+- Increased per-game direct poster candidate probe limit (24) to catch valid boxarts like `Super Mario Bros. (World)`
+- Keeps sync stability safeguards while improving difficult NES title hit-rate
+
+## 0.3.21
+
+- Fixed stale poster miss-cache poisoning by rotating miss-cache key and shortening miss TTL
+- Direct poster candidate checks now always retry instead of being blocked by old cached misses
+- Added extra region candidate suffixes like `(Japan) (En)` to improve NES hit-rate (for example `Yie Ar Kung-Fu`)
+
+## 0.3.20
+
+- Improved poster match hit-rate for classics like `Super Mario Bros` by adding safer title variants (`Bros`/`Bros.`)
+- Added region-aware poster candidate suffixes (`(World)`, `(USA)`, `(Japan)`, `(Europe)`) based on ROM filename hints
+- Kept candidate generation capped to avoid sync overload while improving difficult-name matches
+
 ## 0.3.19
 
 - Fixed poster sync unhandled promise rejection paths so failed cover fetches no longer crash the Lumioplay webview
