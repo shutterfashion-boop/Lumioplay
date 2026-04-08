@@ -150,6 +150,18 @@ function buildPosterLookupTokens(value: string): string[] {
   )
 }
 
+function extractCanonicalTokens(value: string): string[] {
+  return normalizePosterCanonicalValue(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+}
+
+function hasNumericOrRomanToken(value: string): boolean {
+  const tokens = normalizePosterLookupValue(value).split(' ').filter(Boolean)
+  return tokens.some((token) => /^\d+$/.test(token) || /^(ii|iii|iv|v|vi|vii|viii|ix|x)$/i.test(token))
+}
+
 function safeDecodePosterEntry(value: string): string {
   const unescaped = value
     .replace(/&amp;/gi, '&')
@@ -161,6 +173,51 @@ function safeDecodePosterEntry(value: string): string {
   } catch {
     return unescaped
   }
+}
+
+function buildNamedBoxartUrl(systemName: string, entry: string): string {
+  const decodedEntry = safeDecodePosterEntry(entry).replace(/^\/+/, '').replace(/\.png$/i, '')
+  const encodedEntry = `${encodeURIComponent(decodedEntry)}.png`
+  return `https://thumbnails.libretro.com/${encodeURIComponent(systemName)}/Named_Boxarts/${encodedEntry}`
+}
+
+function normalizePosterCanonicalValue(value: string): string {
+  const ignoredTokens = new Set([
+    'rev', 'revision', 'ver', 'version', 'v',
+    'beta', 'proto', 'sample', 'demo', 'unl', 'hack',
+    'usa', 'us', 'japan', 'jp', 'europe', 'eu', 'world', 'pal', 'ntsc',
+    'en', 'eng', 'fr', 'de', 'es', 'it', 'pt', 'ru', 'zh', 'sv',
+    'nintendo', 'konami', 'capcom', 'namco', 'tengen', 'taxan', 'kemco',
+    'playchoice', 'edition', 'gamecube', 'ereader', 'prg',
+    'two', 'player',
+  ])
+
+  const tokens = normalizePosterLookupValue(value)
+    .split(' ')
+    .map((token) => token.trim())
+    .filter((token) => token.length > 0)
+    .filter((token) => {
+      if (ignoredTokens.has(token)) return false
+      if (/^\d+$/.test(token)) return false
+      if (/^\d{4}$/.test(token)) return false
+      return true
+    })
+  return tokens.join(' ').trim()
+}
+
+function buildCanonicalGameKeys(game: LumioplayGame): string[] {
+  const fileBase = game.fileName.replace(/\.[^/.]+$/, '')
+  const rawCandidates = [
+    getGameDisplayTitle(game),
+    fileBase,
+    fileBase.replace(/\s*-\s*.*$/, '').trim(),
+    fileBase.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim(),
+  ]
+
+  const keys = rawCandidates
+    .map((value) => normalizePosterCanonicalValue(value))
+    .filter(Boolean)
+  return Array.from(new Set(keys))
 }
 
 function getPreferredRegionTokens(region?: string | null): string[] {
@@ -746,10 +803,10 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     return entries
   }
 
-  function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
-    const decoded = safeDecodePosterEntry(entry)
-    const normalizedEntry = normalizePosterLookupValue(decoded)
-    if (!normalizedEntry) return -1000
+function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
+  const decoded = safeDecodePosterEntry(entry)
+  const normalizedEntry = normalizePosterLookupValue(decoded)
+  if (!normalizedEntry) return -1000
 
     const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
     const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
@@ -762,14 +819,39 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     )
     if (titleTokens.length === 0) return -1000
 
+    const normalizedEntryCanonical = normalizePosterCanonicalValue(decoded)
+    const displayCanonical = normalizePosterCanonicalValue(getGameDisplayTitle(game))
+    const fileCanonical = normalizePosterCanonicalValue(game.fileName.replace(/\.[^/.]+$/, ''))
+
     let score = 0
     if (normalizedEntry.startsWith(displayTitle)) score += 80
     if (displayTitle && normalizedEntry.includes(displayTitle)) score += 40
     if (fileTitle && normalizedEntry.includes(fileTitle)) score += 30
+    if (displayCanonical && normalizedEntryCanonical === displayCanonical) score += 120
+    if (fileCanonical && normalizedEntryCanonical === fileCanonical) score += 80
 
     const tokenHits = titleTokens.reduce((hits, token) => hits + (normalizedEntry.includes(token) ? 1 : 0), 0)
     score += tokenHits * 8
     score -= Math.max(0, titleTokens.length - tokenHits) * 6
+
+    const wantedCanonicalTokens = Array.from(
+      new Set([...extractCanonicalTokens(getGameDisplayTitle(game)), ...extractCanonicalTokens(game.fileName)]),
+    )
+    if (wantedCanonicalTokens.length > 0) {
+      const entryCanonicalTokens = new Set(extractCanonicalTokens(decoded))
+      const overlapCount = wantedCanonicalTokens.reduce(
+        (hits, token) => hits + (entryCanonicalTokens.has(token) ? 1 : 0),
+        0,
+      )
+      const overlapRatio = overlapCount / wantedCanonicalTokens.length
+      score += overlapCount * 10
+      score += Math.round(overlapRatio * 30)
+      if (overlapCount === 0) score -= 60
+    }
+
+    const gameHasSequenceToken = hasNumericOrRomanToken(getGameDisplayTitle(game)) || hasNumericOrRomanToken(game.fileName)
+    const entryHasSequenceToken = hasNumericOrRomanToken(decoded)
+    if (!gameHasSequenceToken && entryHasSequenceToken) score -= 22
 
     if (/\[(h|b|t|p)/i.test(decoded)) score -= 45
     if (/\(19xx\)|\(-\)/i.test(decoded)) score -= 30
@@ -823,19 +905,15 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
     const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
     const probeTerms = Array.from(new Set([...buildPosterLookupTokens(displayTitle), ...buildPosterLookupTokens(fileTitle)]))
-    const strictLookupKeys = new Set(
-      [displayTitle, fileTitle]
-        .filter(Boolean)
-        .map((value) => value.replace(/\s+/g, ' ').trim()),
-    )
+    const strictLookupKeys = new Set(buildCanonicalGameKeys(game))
 
     const exactMatch = entries.find((entry) => {
-      const normalizedEntry = normalizePosterLookupValue(safeDecodePosterEntry(entry).replace(/\.png$/i, ''))
+      const normalizedEntry = normalizePosterCanonicalValue(safeDecodePosterEntry(entry).replace(/\.png$/i, ''))
       return normalizedEntry.length > 0 && strictLookupKeys.has(normalizedEntry)
     })
     if (exactMatch) {
       const systemName = SYSTEM_NAME_BY_PLATFORM[platform]
-      const exactUrl = `https://thumbnails.libretro.com/${encodeURIComponent(systemName)}/Named_Boxarts/${exactMatch}`
+      const exactUrl = buildNamedBoxartUrl(systemName, exactMatch)
       if (options?.forceRefresh || !isMissCached(exactUrl)) {
         const resolvedExact = await resolveFirstReachableCoverUrl([exactUrl], { timeoutMs: 2500, maxCandidates: 1 })
         if (resolvedExact) return resolvedExact
@@ -846,22 +924,25 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const shortlist = entries
       .filter((entry) => {
         const normalizedEntry = normalizePosterLookupValue(safeDecodePosterEntry(entry))
-        return probeTerms.length === 0 || probeTerms.some((term) => normalizedEntry.includes(term))
+        const canonicalEntry = normalizePosterCanonicalValue(safeDecodePosterEntry(entry))
+        if (canonicalEntry.length > 0 && strictLookupKeys.has(canonicalEntry)) return true
+        if (probeTerms.length === 0) return true
+        const termHits = probeTerms.reduce((hits, term) => hits + (normalizedEntry.includes(term) ? 1 : 0), 0)
+        const requiredHits = Math.min(2, Math.max(1, probeTerms.length))
+        return termHits >= requiredHits
       })
       .map((entry) => ({ entry, score: rankPosterEntryForGame(entry, game) }))
       .filter((candidate) => candidate.score > -8)
       .sort((left, right) => right.score - left.score)
-      .slice(0, 20)
+      .slice(0, 40)
 
     if (shortlist.length === 0) return null
 
     const systemName = SYSTEM_NAME_BY_PLATFORM[platform]
-    const urls = shortlist.map(
-      (candidate) => `https://thumbnails.libretro.com/${encodeURIComponent(systemName)}/Named_Boxarts/${candidate.entry}`,
-    )
+    const urls = shortlist.map((candidate) => buildNamedBoxartUrl(systemName, candidate.entry))
     const filteredUrls = options?.forceRefresh ? urls : urls.filter((url) => !isMissCached(url))
     if (filteredUrls.length === 0) return null
-    return resolveFirstReachableCoverUrl(filteredUrls, { timeoutMs: 2500, maxCandidates: 20 })
+    return resolveFirstReachableCoverUrl(filteredUrls, { timeoutMs: 4200, maxCandidates: 40 })
   }
 
   async function resolvePosterCoverForGame(game: LumioplayGame, options?: { forceRefresh?: boolean }): Promise<string | null> {

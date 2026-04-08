@@ -100,6 +100,23 @@ function addVariant(variants: Set<string>, value: string) {
   const compactPunctuation = normalized.replace(/['".,!]/g, '').replace(/\s+/g, ' ').trim()
   if (compactPunctuation) variants.add(compactPunctuation)
 
+  const hyphenAsSpace = normalized.replace(/\s*-\s*/g, ' ').replace(/\s+/g, ' ').trim()
+  if (hyphenAsSpace) variants.add(hyphenAsSpace)
+
+  const withRevSuffixRemoved = normalized
+    .replace(/\b(?:rev(?:ision)?|ver(?:sion)?|v)\s*[0-9a-z.]+\b/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (withRevSuffixRemoved) variants.add(withRevSuffixRemoved)
+
+  const collapsedAbbreviations = normalized
+    .replace(/\bg\.\s*i\.\b/gi, 'GI')
+    .replace(/\bm\.\s*s\.\b/gi, 'Ms')
+    .replace(/\bjr\.\b/gi, 'Jr')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (collapsedAbbreviations) variants.add(collapsedAbbreviations)
+
   if (normalized.includes('&')) {
     variants.add(normalized.replace(/\s*&\s*/g, ' and ').replace(/\s+/g, ' ').trim())
   }
@@ -119,6 +136,13 @@ function addVariant(variants: Set<string>, value: string) {
 
   const withoutDiacritics = normalizeDiacritics(normalized)
   if (withoutDiacritics) variants.add(withoutDiacritics)
+
+  if (/\bbros\b/i.test(normalized)) {
+    variants.add(normalized.replace(/\bbros\b/gi, 'Bros.').replace(/\s+/g, ' ').trim())
+  }
+  if (/\bbros\./i.test(normalized)) {
+    variants.add(normalized.replace(/\bbros\./gi, 'Bros').replace(/\s+/g, ' ').trim())
+  }
 }
 
 function createTitleVariants(baseTitle: string, fileName?: string): string[] {
@@ -136,17 +160,60 @@ function createTitleVariants(baseTitle: string, fileName?: string): string[] {
     addVariant(variants, fromFileName)
   }
 
-  return Array.from(variants)
+  const coreTitle = normalizeTitleForLookup(baseTitle).replace(/\s*[-:]\s.*$/, '').trim().toLowerCase()
+  return Array.from(variants).sort((left, right) => {
+    const normalize = (value: string) => value.trim().toLowerCase()
+    const l = normalize(left)
+    const r = normalize(right)
+    let ls = 0
+    let rs = 0
+
+    if (coreTitle && l === coreTitle) ls += 80
+    if (coreTitle && r === coreTitle) rs += 80
+    if (!l.includes(' - ') && !l.includes(':')) ls += 20
+    if (!r.includes(' - ') && !r.includes(':')) rs += 20
+    if (/\bbros\./i.test(left)) ls += 14
+    if (/\bbros\./i.test(right)) rs += 14
+    ls -= Math.min(left.length, 140) / 20
+    rs -= Math.min(right.length, 140) / 20
+
+    return rs - ls
+  })
 }
 
 export function buildCoverCandidates(platform: LumioplayConsoleId, title: string, fileName?: string): string[] {
   const systemName = LIBRETRO_SYSTEMS[platform]
   const titleVariants = createTitleVariants(title, fileName)
-  return titleVariants.map((variant) => {
-    const encodedSystem = encodeURIComponent(systemName)
-    const encodedTitle = encodeURIComponent(variant)
-    return `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodedTitle}.png`
-  })
+  const lowerFile = (fileName ?? '').toLowerCase()
+  const regionSuffixes =
+    lowerFile.includes('world')
+      ? ['', ' (World)', ' (USA)', ' (US)', ' (Japan)', ' (Japan) (En)', ' (Europe)']
+      : lowerFile.includes('usa') || lowerFile.includes('(us)')
+        ? ['', ' (USA)', ' (US)', ' (World)']
+        : lowerFile.includes('japan') || lowerFile.includes('(jp)')
+          ? ['', ' (Japan)', ' (JP)', ' (Japan) (En)', ' (World)']
+          : lowerFile.includes('europe') || lowerFile.includes('(eu)')
+            ? ['', ' (Europe)', ' (EU)', ' (World)']
+            : ['']
+
+  const encodedSystem = encodeURIComponent(systemName)
+  const candidates: string[] = []
+  const seen = new Set<string>()
+
+  for (const variant of titleVariants) {
+    for (const suffix of regionSuffixes) {
+      const withSuffix = `${variant}${suffix}`.trim()
+      const encodedTitle = encodeURIComponent(withSuffix)
+      const url = `https://thumbnails.libretro.com/${encodedSystem}/Named_Boxarts/${encodedTitle}.png`
+      if (!seen.has(url)) {
+        seen.add(url)
+        candidates.push(url)
+      }
+      if (candidates.length >= 28) return candidates
+    }
+  }
+
+  return candidates
 }
 
 export function buildMetadataFromFileName(fileName: string, _platform: LumioplayConsoleId): LumioplayGameMetadata {

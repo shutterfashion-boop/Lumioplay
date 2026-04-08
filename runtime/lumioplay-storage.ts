@@ -158,10 +158,11 @@ function normalizeGameMetadata(game: {
     region: existingMetadata?.region ?? baseMetadata.region ?? null,
     tags: Array.isArray(existingMetadata?.tags) ? existingMetadata.tags : (baseMetadata.tags ?? []),
     coverUrl: game.coverUrl ?? existingMetadata?.coverUrl ?? baseMetadata.coverUrl ?? null,
-    coverCandidates:
-      Array.isArray(existingMetadata?.coverCandidates) && existingMetadata.coverCandidates.length > 0
-        ? existingMetadata.coverCandidates
-        : (baseMetadata.coverCandidates ?? []),
+    coverCandidates: Array.from(
+      new Set([...(baseMetadata.coverCandidates ?? []), ...((Array.isArray(existingMetadata?.coverCandidates)
+        ? existingMetadata?.coverCandidates
+        : []) ?? [])]),
+    ),
   }
   return normalizedMetadata
 }

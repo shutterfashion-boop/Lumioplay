@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.3.28
+
+- Replaced temporary title-specific fallback with a fully dynamic canonical title matcher
+- Canonical matching now ignores noisy metadata tokens (region/revision/publisher/version language markers)
+- Index fallback now prioritizes canonical equivalence so future title variants resolve without hardcoded aliases
+
+## 0.3.27
+
+- Fixed index-fallback boxart URL building to always path-encode entry names before fetch
+- This resolves poster misses caused by special characters in titles (for example `&`, dots, punctuation-heavy names)
+
 ## 0.3.26
 
 - Added manual `force-resync` mode on `Synka posters` that ignores stale miss-cache entries for the current run
