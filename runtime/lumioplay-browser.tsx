@@ -846,7 +846,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
           const chunkResults = await Promise.all(
             chunk.map(async (game) => ({
               gameId: game.id,
-              coverUrl: await resolvePosterCoverForGame(game),
+              coverUrl: await resolvePosterCoverForGame(game).catch(() => null),
             })),
           )
           chunkResults.forEach((result) => {
@@ -874,6 +874,11 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
         } else {
           setStatusMessage(`${resolvedCount}/${processedCount} posters uppdaterades. ${unmatchedCount} spel saknar matchande poster.`)
         }
+      }
+    } catch (error) {
+      if (!options?.silent) {
+        const message = error instanceof Error ? error.message : 'Postersync misslyckades.'
+        setStatusMessage(message || 'Postersync misslyckades.')
       }
     } finally {
       savePosterMissCache()

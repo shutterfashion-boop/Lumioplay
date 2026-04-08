@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.19
+
+- Fixed poster sync unhandled promise rejection paths so failed cover fetches no longer crash the Lumioplay webview
+- Added defensive per-game poster resolve fallback (`null` on fetch failure) during chunked sync
+- Added explicit error reporting in poster sync status instead of bubbling unhandled rejections
+
 ## 0.3.18
 
 - Added poster sync progress indicator (`processed/total` + resolved hits) in the library status area
