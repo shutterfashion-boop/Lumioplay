@@ -100,6 +100,18 @@ function addVariant(variants: Set<string>, value: string) {
   const compactPunctuation = normalized.replace(/['".,!]/g, '').replace(/\s+/g, ' ').trim()
   if (compactPunctuation) variants.add(compactPunctuation)
 
+  const dottedAsSpace = normalized.replace(/\./g, ' ').replace(/\s+/g, ' ').trim()
+  if (dottedAsSpace) variants.add(dottedAsSpace)
+
+  const withoutDots = normalized.replace(/\./g, '').replace(/\s+/g, ' ').trim()
+  if (withoutDots) variants.add(withoutDots)
+
+  const collapsedInitialisms = normalized
+    .replace(/\b(?:[a-z]\s*\.\s*){2,}[a-z]?\b/gi, (match) => match.replace(/[.\s]+/g, '').toUpperCase())
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (collapsedInitialisms) variants.add(collapsedInitialisms)
+
   const hyphenAsSpace = normalized.replace(/\s*-\s*/g, ' ').replace(/\s+/g, ' ').trim()
   if (hyphenAsSpace) variants.add(hyphenAsSpace)
 
@@ -157,12 +169,29 @@ function createTitleVariants(baseTitle: string, fileName?: string): string[] {
     .replace(/\s+/g, ' ')
     .trim()
   if (fromFileName) {
-    addVariant(variants, fromFileName)
+    let current = fromFileName
+    const seen = new Set<string>()
+    for (let step = 0; step < 6; step += 1) {
+      if (!current || seen.has(current)) break
+      seen.add(current)
+      addVariant(variants, current)
+      const withoutTrailingParens = current.replace(/\s*\([^()]*\)\s*$/, '').replace(/\s+/g, ' ').trim()
+      if (!withoutTrailingParens || withoutTrailingParens === current) break
+      current = withoutTrailingParens
+    }
   }
 
   const coreTitle = normalizeTitleForLookup(baseTitle).replace(/\s*[-:]\s.*$/, '').trim().toLowerCase()
+  const normalizeCore = (value: string) =>
+    value
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+  const coreTitleNormalized = normalizeCore(coreTitle)
   return Array.from(variants).sort((left, right) => {
     const normalize = (value: string) => value.trim().toLowerCase()
+    const normalizeLoose = (value: string) => normalizeCore(normalize(value))
     const l = normalize(left)
     const r = normalize(right)
     let ls = 0
@@ -170,6 +199,8 @@ function createTitleVariants(baseTitle: string, fileName?: string): string[] {
 
     if (coreTitle && l === coreTitle) ls += 80
     if (coreTitle && r === coreTitle) rs += 80
+    if (coreTitleNormalized && normalizeLoose(left) === coreTitleNormalized) ls += 56
+    if (coreTitleNormalized && normalizeLoose(right) === coreTitleNormalized) rs += 56
     if (!l.includes(' - ') && !l.includes(':')) ls += 20
     if (!r.includes(' - ') && !r.includes(':')) rs += 20
     if (/\bbros\./i.test(left)) ls += 14
@@ -209,7 +240,7 @@ export function buildCoverCandidates(platform: LumioplayConsoleId, title: string
         seen.add(url)
         candidates.push(url)
       }
-      if (candidates.length >= 28) return candidates
+      if (candidates.length >= 36) return candidates
     }
   }
 

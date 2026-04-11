@@ -69,7 +69,7 @@ const JOYPAD_BUTTON_COUNT = 16
 const POSTER_SYNC_CONCURRENCY = 3
 const POSTER_SYNC_BATCH_SIZE = 20
 const POSTER_SYNC_AUTO_LIMIT = 10
-const POSTER_SYNC_MISS_CACHE_KEY = 'lumioplay_poster_miss_cache_v2'
+const POSTER_SYNC_MISS_CACHE_KEY = 'lumioplay_poster_miss_cache_v3'
 const POSTER_SYNC_MISS_TTL_MS = 45 * 60 * 1000
 const POSTER_SYNC_MAX_MISS_ENTRIES = 2500
 const POSTER_INDEX_CACHE_TTL_MS = 24 * 60 * 60 * 1000
@@ -928,7 +928,10 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
         if (canonicalEntry.length > 0 && strictLookupKeys.has(canonicalEntry)) return true
         if (probeTerms.length === 0) return true
         const termHits = probeTerms.reduce((hits, term) => hits + (normalizedEntry.includes(term) ? 1 : 0), 0)
-        const requiredHits = Math.min(2, Math.max(1, probeTerms.length))
+        const requiredHits =
+          probeTerms.length >= 5
+            ? 1
+            : Math.min(2, Math.max(1, probeTerms.length))
         return termHits >= requiredHits
       })
       .map((entry) => ({ entry, score: rankPosterEntryForGame(entry, game) }))
