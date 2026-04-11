@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.35
+
+- Added SDK helper for plugin home-row track layout classes (`getPluginHomeRowTrackClass`) in runtime-host SDK
+- Updated Lumioplay favorites row to use the SDK helper instead of hardcoded row classes
+- Keeps slider scrollbar styling aligned with host-native Home rows by default
+
 ## 0.3.34
 
 - Home row cards for `Lumioplay favorites` now launch games directly on click (no details hop first)

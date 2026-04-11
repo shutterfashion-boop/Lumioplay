@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { HomeRowProps } from '@/lib/plugin-sdk'
+import { getPluginHomeRowTrackClass, type HomeRowProps } from '@/lib/plugin-sdk'
 import {
   canLaunchGame,
   canLaunchLibretro,
@@ -102,7 +102,7 @@ export function LumioplayFavoritesHomeRow({
           </svg>
         </button>
       </div>
-      <div className={layout === 'slider' ? 'thin-slider-scrollbar flex gap-3 overflow-x-auto pb-3' : 'grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'}>
+      <div className={getPluginHomeRowTrackClass(layout)}>
         {visibleGames.map((game) => {
           const coverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null
           const platformLabel = getPlatformLabel(getEffectivePlatform(game))

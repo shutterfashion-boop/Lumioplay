@@ -54,6 +54,20 @@ export interface HomeRowProps {
   sliderCardWidth?: string
 }
 
+export const PLUGIN_HOME_ROW_SLIDER_TRACK_CLASS =
+  'thin-slider-scrollbar flex gap-3 overflow-x-auto pb-3'
+
+export const PLUGIN_HOME_ROW_GRID_TRACK_CLASS =
+  'grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'
+
+export function getPluginHomeRowTrackClass(
+  layout: HomeRowProps['layout'],
+  options?: { gridClassName?: string },
+): string {
+  if (layout === 'slider') return PLUGIN_HOME_ROW_SLIDER_TRACK_CLASS
+  return options?.gridClassName?.trim() || PLUGIN_HOME_ROW_GRID_TRACK_CLASS
+}
+
 export interface SettingsSection {
   id: string
   label: PluginText
