@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.38
+
+- Reworked Lumioplay Hero layout to be compact and content-first
+- Removed hero background image layer entirely
+- Moved cover image to the left and text/content to the right
+- Placed action buttons directly under the hero text
+
 ## 0.3.37
 
 - Reduced Lumioplay Hero visual footprint (smaller card, tighter spacing, smaller side cover) to better match Home density

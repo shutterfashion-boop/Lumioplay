@@ -161,18 +161,19 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
   const playCount = heroGame.playCount ?? 0
 
   return (
-    <section className="relative overflow-hidden rounded-[1.6rem] border border-white/10 bg-gradient-to-br from-slate-900/95 via-[#0a1533]/95 to-[#050a1a]/95 p-4 shadow-[0_18px_46px_rgba(0,0,0,0.36)]">
-      {coverUrl ? (
-        <div className="pointer-events-none absolute inset-0 opacity-25">
-          <img src={coverUrl} alt="" className="h-full w-full object-cover blur-2xl scale-110" />
-          <div className="absolute inset-0 bg-gradient-to-r from-[#040914] via-[#040914]/70 to-[#040914]/90" />
+    <section className="rounded-[1.3rem] border border-white/10 bg-[#081126]/95 p-4 shadow-[0_14px_32px_rgba(0,0,0,0.28)]">
+      <div className="grid items-start gap-4 md:grid-cols-[minmax(96px,120px)_minmax(0,1fr)]">
+        <div className="w-full max-w-[120px] overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
+          {coverUrl ? (
+            <img src={coverUrl} alt={title} className="aspect-[2/3] w-full object-cover" />
+          ) : (
+            <div className="aspect-[2/3] w-full bg-gradient-to-br from-slate-800 to-slate-950" />
+          )}
         </div>
-      ) : null}
-      <div className="relative z-10 grid items-center gap-4 md:grid-cols-[minmax(0,1.4fr)_minmax(120px,0.5fr)]">
-        <div className="space-y-2.5">
+        <div className="space-y-2">
           <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Lumioplay Hero</p>
-          <h2 className="text-[1.95rem] font-semibold leading-tight text-white">{title}</h2>
-          <p className="text-sm text-slate-300">
+          <h2 className="text-[1.55rem] font-semibold leading-tight text-white">{title}</h2>
+          <p className="text-[0.95rem] text-slate-300">
             {summary ?? (mode === 'random' ? 'Slumpat spel från ditt bibliotek.' : 'Senast spelade spelet från ditt bibliotek.')}
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -200,33 +201,24 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
               </span>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+          <div className="flex flex-wrap items-center gap-2 pt-0.5">
             <button
               type="button"
               onClick={() => void handlePlay()}
               disabled={launching}
-              className="rounded-full border border-accent-400/40 bg-accent-500/90 px-4 py-2 text-[0.62rem] font-normal uppercase tracking-[0.2em] text-white transition hover:bg-accent-500 disabled:opacity-60"
+              className="rounded-full border border-accent-400/40 bg-accent-500/90 px-4 py-2 text-[0.6rem] font-normal uppercase tracking-[0.2em] text-white transition hover:bg-accent-500 disabled:opacity-60"
             >
               {launching ? 'Startar...' : 'Spela nu'}
             </button>
             <button
               type="button"
               onClick={() => onNavigate({ pageId: 'lumioplay-library' })}
-              className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-[0.62rem] font-normal uppercase tracking-[0.2em] text-slate-200 transition hover:border-white/25 hover:bg-white/[0.08] hover:text-white"
+              className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-[0.6rem] font-normal uppercase tracking-[0.2em] text-slate-200 transition hover:border-white/25 hover:bg-white/[0.08] hover:text-white"
             >
               Öppna bibliotek
             </button>
           </div>
           {launchError ? <p className="text-xs text-rose-300">{launchError}</p> : null}
-        </div>
-        <div className="flex items-center justify-end">
-          <div className="relative w-full max-w-[140px] overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
-            {coverUrl ? (
-              <img src={coverUrl} alt={title} className="aspect-[2/3] w-full object-cover" />
-            ) : (
-              <div className="aspect-[2/3] w-full bg-gradient-to-br from-slate-800 to-slate-950" />
-            )}
-          </div>
         </div>
       </div>
     </section>
