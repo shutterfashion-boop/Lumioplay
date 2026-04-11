@@ -1,11 +1,12 @@
 import type { LumioPlugin } from '@/lib/plugin-sdk'
 import { LumioplayBrowsePage } from './lumioplay-browser'
+import { LumioplayFavoritesHomeRow } from './lumioplay-home-row'
 import { LumioplaySettingsSection } from './lumioplay-settings-section'
 
 export const LumioplayPlugin: LumioPlugin = {
   id: 'com.lumio.lumioplay',
   name: { en: 'Lumioplay', sv: 'Lumioplay' },
-  version: '0.3.18',
+  version: '0.3.33',
   description: {
     en: 'Browse local ROMs and launch retro games directly inside Lumio via embedded libretro.',
     sv: 'Bladdra bland lokala ROMs och starta retrospel direkt i Lumio via inbäddad libretro.',
@@ -30,6 +31,19 @@ export const LumioplayPlugin: LumioPlugin = {
       label: { en: 'Lumioplay', sv: 'Lumioplay' },
       defaultEnabled: true,
       target: { pageId: 'lumioplay-library' },
+    })
+
+    ctx.registerHomeRow({
+      id: 'lumioplay-favorites-row',
+      title: { en: 'Lumioplay favorites', sv: 'Lumioplay favoriter' },
+      showOnHome: false,
+      Row: (props) => <LumioplayFavoritesHomeRow {...props} />,
+    })
+
+    ctx.registerHomeSource({
+      id: 'lumioplay-favorites',
+      label: { en: 'Lumioplay favorites', sv: 'Lumioplay favoriter' },
+      rowId: 'lumioplay-favorites-row',
     })
   },
 }

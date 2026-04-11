@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.33
+
+- Added a plugin-native custom Home source: `Lumioplay favorites`
+- Added a new Home row contribution that renders favorite-marked games with full support for Home layout/count/slider override from app settings
+- No app-core patch needed: the row is now exposed via plugin SDK (`home-rows`) and selectable in Custom Home Rows
+
 ## 0.3.32
 
 - Added CORS-safe poster index fallback via libretro-thumbnails GitHub tree when direct `thumbnails.libretro.com` directory fetch fails in browser/runtime
