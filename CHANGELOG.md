@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.41
+
+- Enforced a strict horizontal 30/70 hero layout (cover left, text right) without responsive stack fallback
+- Increased left cover column size range for a visibly larger hero image
+- Kept single-action hero CTA (`Spela nu`) with no library button
+
 ## 0.3.40
 
 - Switched Lumioplay hero backdrop to an embedded local image asset (packaged in plugin bundle, no external URL dependency)

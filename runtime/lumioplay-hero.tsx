@@ -162,16 +162,16 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
   const playCount = heroGame.playCount ?? 0
 
   return (
-    <section className="px-1 py-2">
-      <div className="grid items-start gap-5 md:grid-cols-[minmax(210px,30%)_minmax(0,70%)]">
-        <div className="w-full max-w-[260px] overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
+    <section className="py-1">
+      <div className="flex items-start gap-6">
+        <div className="w-[30%] min-w-[240px] max-w-[340px] overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
           {coverUrl ? (
             <img src={coverUrl} alt={title} className="aspect-[2/3] w-full object-cover" />
           ) : (
             <div className="aspect-[2/3] w-full bg-gradient-to-br from-slate-800 to-slate-950" />
           )}
         </div>
-        <div className="space-y-2">
+        <div className="w-[70%] min-w-0 space-y-2">
           <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Lumioplay Hero</p>
           <h2 className="text-[1.55rem] font-semibold leading-tight text-white">{title}</h2>
           <p className="text-[0.95rem] text-slate-300">
