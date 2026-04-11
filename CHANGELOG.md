@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.31
+
+- Version bump for plugin distribution/update flow in app
+
 ## 0.3.30
 
 - Added two-stage index fallback for poster sync: strict shortlist first, then relaxed shortlist if strict returns no viable candidates
