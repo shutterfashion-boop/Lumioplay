@@ -81,6 +81,11 @@ try {
     jsx: 'automatic',
     minify: false,
     sourcemap: false,
+    loader: {
+      '.jpg': 'dataurl',
+      '.jpeg': 'dataurl',
+      '.png': 'dataurl',
+    },
     plugins: [aliasPlugin],
     define: {
       'process.env.NODE_ENV': JSON.stringify('production'),

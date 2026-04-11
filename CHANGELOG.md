@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.40
+
+- Switched Lumioplay hero backdrop to an embedded local image asset (packaged in plugin bundle, no external URL dependency)
+- Updated runtime bundler/image typings to inline local `.jpg/.png` hero assets safely
+- Kept unboxed hero behavior so backdrop applies to the full host hero area
+
 ## 0.3.39
 
 - Updated Lumioplay Hero to a clearer 30/70 two-column structure (cover left, text/content right)

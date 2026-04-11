@@ -5,6 +5,7 @@ import { startHomeInputSession } from './lumioplay-home-input'
 import { getGameDisplayTitle } from './lumioplay-metadata'
 import { getEffectivePlatform, getHeroMode, getStoredGames, LUMIOPLAY_PLATFORMS, markGameLaunched } from './lumioplay-storage'
 import type { LumioplayConsoleId, LumioplayGame } from './lumioplay-types'
+import defaultLumioplayHeroBackdrop from './assets/lumioplay-hero-default.jpg'
 
 function getPlatformLabel(platformId: LumioplayConsoleId): string {
   return LUMIOPLAY_PLATFORMS.find((platform) => platform.id === platformId)?.label ?? platformId.toUpperCase()
@@ -120,7 +121,7 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
   useEffect(() => {
     const active = Boolean(heroGame)
     onActiveChange(active)
-    onBackdropChange(heroGame?.coverUrl ?? heroGame?.metadata?.coverUrl ?? null)
+    onBackdropChange(active ? defaultLumioplayHeroBackdrop : null)
     return () => {
       onActiveChange(false)
       onBackdropChange(null)
@@ -161,7 +162,7 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
   const playCount = heroGame.playCount ?? 0
 
   return (
-    <section className="rounded-[1.3rem] border border-white/10 bg-[#081126]/95 p-4 shadow-[0_14px_32px_rgba(0,0,0,0.28)]">
+    <section className="px-1 py-2">
       <div className="grid items-start gap-5 md:grid-cols-[minmax(210px,30%)_minmax(0,70%)]">
         <div className="w-full max-w-[260px] overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
           {coverUrl ? (

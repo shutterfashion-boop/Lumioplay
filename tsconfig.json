@@ -14,6 +14,7 @@
     }
   },
   "include": [
+    "runtime/**/*.d.ts",
     "runtime/**/*.ts",
     "runtime/**/*.tsx",
     "runtime-host/**/*.ts",
