@@ -121,6 +121,13 @@ function stripLikelyFileExtension(value: string): string {
   return value.replace(/\.[a-z0-9]{1,8}$/i, '')
 }
 
+function systemNameToLibretroRepoSlug(systemName: string): string {
+  return systemName
+    .trim()
+    .replace(/\s*-\s*/g, '_-_')
+    .replace(/\s+/g, '_')
+}
+
 function normalizePosterLookupValue(value: string): string {
   const normalized = value
     .toLowerCase()
@@ -792,17 +799,54 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
     const systemName = SYSTEM_NAME_BY_PLATFORM[platform]
     if (!systemName) return []
     const indexUrl = `https://thumbnails.libretro.com/${encodeURIComponent(systemName)}/Named_Boxarts/`
-    const response = await fetch(indexUrl, { cache: 'no-store' })
-    if (!response.ok) return []
-    const html = await response.text()
-    const matches = html.match(/href="([^"]+\.png)"/gi) ?? []
-    const entries = Array.from(
-      new Set(
-        matches
-          .map((raw) => safeDecodePosterEntry(raw.replace(/^href="/i, '').replace(/"$/i, '')))
-          .filter(Boolean),
-      ),
-    )
+    let entries: string[] = []
+    try {
+      const response = await fetch(indexUrl, { cache: 'no-store' })
+      if (response.ok) {
+        const html = await response.text()
+        const matches = html.match(/href="([^"]+\.png)"/gi) ?? []
+        entries = Array.from(
+          new Set(
+            matches
+              .map((raw) => safeDecodePosterEntry(raw.replace(/^href="/i, '').replace(/"$/i, '')))
+              .filter(Boolean),
+          ),
+        )
+      }
+    } catch {
+      // Fallback below.
+    }
+
+    // Browser CORS can block direct directory fetches from thumbnails.libretro.com.
+    // Fallback to libretro-thumbnails GitHub tree (CORS-friendly) to build the same index.
+    if (entries.length === 0) {
+      const repoSlug = systemNameToLibretroRepoSlug(systemName)
+      const treeUrl = `https://api.github.com/repos/libretro-thumbnails/${repoSlug}/git/trees/master?recursive=1`
+      try {
+        const treeResponse = await fetch(treeUrl, {
+          cache: 'no-store',
+          headers: { Accept: 'application/vnd.github+json' },
+        })
+        if (treeResponse.ok) {
+          const payload = (await treeResponse.json()) as {
+            tree?: Array<{ path?: string; type?: string }>
+          }
+          entries = Array.from(
+            new Set(
+              (payload.tree ?? [])
+                .filter((node) => node.type === 'blob' && typeof node.path === 'string')
+                .map((node) => node.path as string)
+                .filter((path) => path.startsWith('Named_Boxarts/') && path.toLowerCase().endsWith('.png'))
+                .map((path) => path.slice('Named_Boxarts/'.length))
+                .filter(Boolean),
+            ),
+          )
+        }
+      } catch {
+        // Keep empty on failure.
+      }
+    }
+
     posterIndexCacheRef.current.set(platform, { fetchedAt: Date.now(), entries })
     return entries
   }

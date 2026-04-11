@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.32
+
+- Added CORS-safe poster index fallback via libretro-thumbnails GitHub tree when direct `thumbnails.libretro.com` directory fetch fails in browser/runtime
+- Improved filename-derived title variants for punctuation/revision-heavy ROM names and increased direct candidate budget
+- This makes difficult NES names (e.g. `Rev`, dotted initials, subtitle variants) resolve more reliably without title-specific hardcoding
+
 ## 0.3.31
 
 - Version bump for plugin distribution/update flow in app

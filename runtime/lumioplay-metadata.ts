@@ -165,11 +165,12 @@ function createTitleVariants(baseTitle: string, fileName?: string): string[] {
   const variants = new Set<string>()
   addVariant(variants, baseTitle)
 
+  // Keep a raw filename-derived variant so punctuation/revision-heavy ROM names
+  // can still hit exact libretro boxart titles.
   const fromFileName = fileName
     ? stripLikelyFileExtension(fileName)
         .replace(/\[[^\]]+\]/g, ' ')
-        .replace(/\([^)]*\b(?:rev|beta|proto|sample|hack|demo)\b[^)]*\)/gi, ' ')
-        .replace(/[_+.]+/g, ' ')
+        .replace(/[_+]+/g, ' ')
         .replace(/\s+/g, ' ')
         .trim()
     : undefined
@@ -184,6 +185,13 @@ function createTitleVariants(baseTitle: string, fileName?: string): string[] {
       if (!withoutTrailingParens || withoutTrailingParens === current) break
       current = withoutTrailingParens
     }
+
+    // Also provide a cleaner fallback variant without noisy metadata tokens.
+    const compactFromFileName = fromFileName
+      .replace(/\([^)]*\b(?:beta|proto|sample|hack|demo|unl)\b[^)]*\)/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (compactFromFileName) addVariant(variants, compactFromFileName)
   }
 
   const coreTitle = normalizeTitleForLookup(baseTitle).replace(/\s*[-:]\s.*$/, '').trim().toLowerCase()
@@ -245,7 +253,7 @@ export function buildCoverCandidates(platform: LumioplayConsoleId, title: string
         seen.add(url)
         candidates.push(url)
       }
-      if (candidates.length >= 36) return candidates
+      if (candidates.length >= 80) return candidates
     }
   }
 
