@@ -6,6 +6,7 @@ import {
   launchGameWithRetroArch,
   launchLibretroGameEmbedded,
 } from './lumioplay-launcher'
+import { startHomeInputSession } from './lumioplay-home-input'
 import { getGameDisplayTitle } from './lumioplay-metadata'
 import { getEffectivePlatform, getStoredGames, LUMIOPLAY_PLATFORMS, markGameLaunched } from './lumioplay-storage'
 import type { LumioplayGame, LumioplayConsoleId } from './lumioplay-types'
@@ -69,6 +70,7 @@ export function LumioplayFavoritesHomeRow({
     try {
       if (canLaunchLibretro(game)) {
         await launchLibretroGameEmbedded(game)
+        startHomeInputSession()
       } else {
         await launchGameWithRetroArch(game)
       }

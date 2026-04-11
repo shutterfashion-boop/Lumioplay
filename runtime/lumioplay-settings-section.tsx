@@ -1,10 +1,11 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { isPluginDesktopHost, pickPluginFolder } from '@/lib/plugin-sdk'
 import {
   getAutoSyncEnabled,
   getAutoSyncIntervalSeconds,
+  getHeroMode,
   getGamepadExitCombo,
   getGamepadMapping,
   LUMIOPLAY_JOYPAD_BINDINGS,
@@ -12,6 +13,7 @@ import {
   getRomFolders,
   setAutoSyncEnabled,
   setAutoSyncIntervalSeconds,
+  setHeroMode,
   setGamepadExitCombo,
   setGamepadMapping,
   setRetroArchCoresPath,
@@ -28,10 +30,39 @@ export function LumioplaySettingsSection() {
   const [romFoldersText, setRomFoldersText] = useState(() => getRomFolders().join('\n'))
   const [autoSyncEnabled, setAutoSyncEnabledState] = useState(() => getAutoSyncEnabled())
   const [autoSyncIntervalSeconds, setAutoSyncIntervalSecondsState] = useState(() => getAutoSyncIntervalSeconds())
+  const [heroMode, setHeroModeState] = useState<'last_played' | 'random'>(() => getHeroMode())
   const [gamepadMapping, setGamepadMappingState] = useState<Record<number, number>>(() => getGamepadMapping())
   const [exitComboText, setExitComboText] = useState(() => getGamepadExitCombo().join(', '))
+  const [learningBinding, setLearningBinding] = useState<number | null>(null)
   const [saved, setSaved] = useState(false)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (learningBinding === null) return
+    let rafId = 0
+    let cancelled = false
+
+    const onFrame = () => {
+      if (cancelled) return
+      const pad = navigator.getGamepads?.().find((entry) => Boolean(entry)) ?? null
+      if (pad) {
+        const pressedIndex = pad.buttons.findIndex((button) => Boolean(button?.pressed))
+        if (pressedIndex >= 0) {
+          setGamepadMappingState((current) => ({ ...current, [learningBinding]: pressedIndex }))
+          setLearningBinding(null)
+          setStatusMessage(`Mappade ${LUMIOPLAY_JOYPAD_BINDINGS.find((b) => b.index === learningBinding)?.label ?? learningBinding} till gamepad-index ${pressedIndex}.`)
+          return
+        }
+      }
+      rafId = window.requestAnimationFrame(onFrame)
+    }
+
+    rafId = window.requestAnimationFrame(onFrame)
+    return () => {
+      cancelled = true
+      if (rafId) window.cancelAnimationFrame(rafId)
+    }
+  }, [learningBinding])
 
   function handleSave() {
     const parsedExitCombo = exitComboText
@@ -49,6 +80,7 @@ export function LumioplaySettingsSection() {
     )
     setAutoSyncEnabled(autoSyncEnabled)
     setAutoSyncIntervalSeconds(autoSyncIntervalSeconds)
+    setHeroMode(heroMode)
     setGamepadMapping(gamepadMapping)
     setGamepadExitCombo(parsedExitCombo)
     setSaved(true)
@@ -158,6 +190,22 @@ export function LumioplaySettingsSection() {
       </div>
 
       <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
+        <p className="text-sm font-medium text-white">Lumioplay Hero</p>
+        <p className="mt-1 text-sm text-slate-400">Välj om Hero ska visa senaste spelat eller ett slumpat spel.</p>
+        <div className="mt-3 max-w-sm space-y-2">
+          <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Hero-läge</label>
+          <select
+            value={heroMode}
+            onChange={(event) => setHeroModeState(event.target.value === 'random' ? 'random' : 'last_played')}
+            className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-accent-400/30"
+          >
+            <option value="last_played">Senast spelat</option>
+            <option value="random">Random spel</option>
+          </select>
+        </div>
+      </div>
+
+      <div className="rounded-2xl border border-white/10 bg-slate-900/60 p-4">
         <p className="text-sm font-medium text-white">Handkontroll</p>
         <p className="mt-1 text-sm text-slate-400">
           Ställ in vilken gamepad-knapp (index) som ska styra varje libretro-knapp.
@@ -179,6 +227,13 @@ export function LumioplaySettingsSection() {
                 }}
                 className="h-9 w-24 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-accent-400/30"
               />
+              <button
+                type="button"
+                onClick={() => setLearningBinding((current) => (current === binding.index ? null : binding.index))}
+                className={learningBinding === binding.index ? activePillClass : pillClass}
+              >
+                {learningBinding === binding.index ? 'Tryck knapp...' : 'Lär'}
+              </button>
             </label>
           ))}
         </div>

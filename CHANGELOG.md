@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.3.36
+
+- Fixed home-row launch control flow by adding a shared home input session: `Esc` and configured gamepad-exit combo now stop embedded games started from Lumioplay home surfaces
+- Added gamepad "learn" mode in settings so joypad bindings can be mapped by pressing controller buttons (instead of typing indices only)
+- Added Lumioplay Hero contribution with configurable mode (`Senast spelat` or `Random`) and direct play action
+- Added hero mode setting to Lumioplay settings and plugin metadata capability for hero integration
+
 ## 0.3.35
 
 - Added SDK helper for plugin home-row track layout classes (`getPluginHomeRowTrackClass`) in runtime-host SDK

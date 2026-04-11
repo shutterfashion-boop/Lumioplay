@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS: LumioplayLibrarySettings = {
   romFolders: [],
   autoSyncEnabled: false,
   autoSyncIntervalSeconds: 45,
+  heroMode: 'last_played',
 }
 
 export const LUMIOPLAY_PLATFORMS: LumioplayPlatformDefinition[] = [
@@ -97,6 +98,7 @@ function normalizeLibrarySettings(value?: Partial<LumioplayLibrarySettings> | nu
     romFolders: Array.isArray(value?.romFolders) ? value!.romFolders.filter(Boolean) : DEFAULT_SETTINGS.romFolders,
     autoSyncEnabled: value?.autoSyncEnabled ?? DEFAULT_SETTINGS.autoSyncEnabled,
     autoSyncIntervalSeconds: Math.max(15, Math.min(300, Number(value?.autoSyncIntervalSeconds ?? DEFAULT_SETTINGS.autoSyncIntervalSeconds))),
+    heroMode: value?.heroMode === 'random' ? 'random' : 'last_played',
   }
 }
 
@@ -584,6 +586,20 @@ export function setAutoSyncIntervalSeconds(value: number): void {
     settings: {
       ...library.settings,
       autoSyncIntervalSeconds: Math.max(15, Math.min(300, Math.round(value))),
+    },
+  }))
+}
+
+export function getHeroMode(): 'last_played' | 'random' {
+  return getLibrary().settings.heroMode
+}
+
+export function setHeroMode(value: 'last_played' | 'random'): void {
+  updateLibrary((library) => ({
+    ...library,
+    settings: {
+      ...library.settings,
+      heroMode: value === 'random' ? 'random' : 'last_played',
     },
   }))
 }

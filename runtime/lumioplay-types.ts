@@ -59,6 +59,7 @@ export interface LumioplayLibrarySettings {
   romFolders: string[]
   autoSyncEnabled: boolean
   autoSyncIntervalSeconds: number
+  heroMode: 'last_played' | 'random'
 }
 
 export interface LumioplayLibraryDatabase {

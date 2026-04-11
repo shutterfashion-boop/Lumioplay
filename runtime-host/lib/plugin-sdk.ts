@@ -89,6 +89,17 @@ export interface HomeSourceContribution {
   rowId: string
 }
 
+export interface PluginHeroProps {
+  onNavigate: (target: BrowsePageTarget) => void
+  onActiveChange: (active: boolean) => void
+  onBackdropChange: (backdropUrl: string | null) => void
+}
+
+export interface PluginHeroContribution {
+  id: string
+  Hero: React.ComponentType<PluginHeroProps>
+}
+
 export interface BrowsePageContribution {
   id: string
   label: PluginText
@@ -106,6 +117,7 @@ export interface PluginContext {
   registerSettingsSection(section: SettingsSection): void
   registerHomeRow(row: HomeRowContribution): void
   registerHomeSource(source: HomeSourceContribution): void
+  registerHero(hero: PluginHeroContribution): void
   registerBrowsePage(page: BrowsePageContribution): void
   registerMainMenuItem(item: NavigationItemContribution): void
   registerTopbarItem(item: NavigationItemContribution): void
