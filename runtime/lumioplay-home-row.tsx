@@ -1,7 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { HomeRowProps } from '@/lib/plugin-sdk'
+import {
+  canLaunchGame,
+  canLaunchLibretro,
+  launchGameWithRetroArch,
+  launchLibretroGameEmbedded,
+} from './lumioplay-launcher'
 import { getGameDisplayTitle } from './lumioplay-metadata'
-import { getEffectivePlatform, getStoredGames, LUMIOPLAY_PLATFORMS } from './lumioplay-storage'
+import { getEffectivePlatform, getStoredGames, LUMIOPLAY_PLATFORMS, markGameLaunched } from './lumioplay-storage'
 import type { LumioplayGame, LumioplayConsoleId } from './lumioplay-types'
 
 const actionButtonClass =
@@ -30,6 +36,8 @@ export function LumioplayFavoritesHomeRow({
   sliderCardWidth = 'calc((100% - 3 * 0.75rem) / 4)',
 }: HomeRowProps) {
   const [games, setGames] = useState<LumioplayGame[]>(() => sortFavoriteGames(getStoredGames()))
+  const [launchingGameId, setLaunchingGameId] = useState<string | null>(null)
+  const [launchError, setLaunchError] = useState<string | null>(null)
 
   useEffect(() => {
     const sync = () => setGames(sortFavoriteGames(getStoredGames()))
@@ -49,6 +57,30 @@ export function LumioplayFavoritesHomeRow({
   }, [])
 
   const visibleGames = useMemo(() => games.slice(0, Math.max(1, count)), [games, count])
+
+  async function handlePlay(game: LumioplayGame): Promise<void> {
+    setLaunchError(null)
+    if (!canLaunchLibretro(game) && !canLaunchGame(game)) {
+      onNavigate({ pageId: 'lumioplay-library' })
+      return
+    }
+
+    setLaunchingGameId(game.id)
+    try {
+      if (canLaunchLibretro(game)) {
+        await launchLibretroGameEmbedded(game)
+      } else {
+        await launchGameWithRetroArch(game)
+      }
+      setGames(sortFavoriteGames(markGameLaunched(game.id)))
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Kunde inte starta spelet.'
+      setLaunchError(message)
+      onNavigate({ pageId: 'lumioplay-library' })
+    } finally {
+      setLaunchingGameId(null)
+    }
+  }
 
   if (visibleGames.length === 0) return null
 
@@ -70,7 +102,7 @@ export function LumioplayFavoritesHomeRow({
           </svg>
         </button>
       </div>
-      <div className={layout === 'slider' ? 'flex gap-3 overflow-x-auto pb-3' : 'grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'}>
+      <div className={layout === 'slider' ? 'thin-slider-scrollbar flex gap-3 overflow-x-auto pb-3' : 'grid grid-cols-2 gap-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6'}>
         {visibleGames.map((game) => {
           const coverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null
           const platformLabel = getPlatformLabel(getEffectivePlatform(game))
@@ -78,7 +110,7 @@ export function LumioplayFavoritesHomeRow({
             <button
               key={game.id}
               type="button"
-              onClick={() => onNavigate({ pageId: 'lumioplay-library' })}
+              onClick={() => void handlePlay(game)}
               className={`group cursor-pointer overflow-hidden bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${layout === 'slider' ? 'flex-none' : 'w-full'}`}
               style={layout === 'slider' ? { width: sliderCardWidth } : undefined}
             >
@@ -102,6 +134,17 @@ export function LumioplayFavoritesHomeRow({
                     ★
                   </span>
                 </div>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className="flex h-12 w-12 items-center justify-center rounded-full border border-white/20 bg-black/45 text-white backdrop-blur-sm transition group-hover:scale-105 group-hover:bg-black/65">
+                    {launchingGameId === game.id ? (
+                      <span className="text-[10px] uppercase tracking-[0.14em]">...</span>
+                    ) : (
+                      <svg className="ml-0.5 h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M8 5v14l11-7z" />
+                      </svg>
+                    )}
+                  </span>
+                </div>
               </div>
               <div className="p-2.5">
                 <p className="text-[9px] uppercase tracking-[0.22em] text-slate-300/60">
@@ -115,6 +158,7 @@ export function LumioplayFavoritesHomeRow({
           )
         })}
       </div>
+      {launchError ? <p className="mt-2 text-xs text-rose-300">{launchError}</p> : null}
     </section>
   )
 }

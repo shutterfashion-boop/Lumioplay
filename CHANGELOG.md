@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.34
+
+- Home row cards for `Lumioplay favorites` now launch games directly on click (no details hop first)
+- Added centered play affordance on game cards in the favorites row
+- Updated favorites row slider container to use app-native `thin-slider-scrollbar` styling for visual consistency
+
 ## 0.3.33
 
 - Added a plugin-native custom Home source: `Lumioplay favorites`
