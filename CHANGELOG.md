@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.29
+
+- Improved generic poster matching for complex ROM filenames without title-specific hardcoding
+- Added broader punctuation/initialism normalization and iterative trailing-metadata stripping for resilient lookup
+- Relaxed long-title shortlist filtering and rotated poster miss-cache key to re-test previously missed candidates
+
 ## 0.3.28
 
 - Replaced temporary title-specific fallback with a fully dynamic canonical title matcher
