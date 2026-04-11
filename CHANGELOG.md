@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.39
+
+- Updated Lumioplay Hero to a clearer 30/70 two-column structure (cover left, text/content right)
+- Increased left cover size to match requested visual scale
+- Removed the `Öppna bibliotek` button from hero actions
+
 ## 0.3.38
 
 - Reworked Lumioplay Hero layout to be compact and content-first

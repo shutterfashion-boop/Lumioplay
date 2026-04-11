@@ -162,8 +162,8 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
 
   return (
     <section className="rounded-[1.3rem] border border-white/10 bg-[#081126]/95 p-4 shadow-[0_14px_32px_rgba(0,0,0,0.28)]">
-      <div className="grid items-start gap-4 md:grid-cols-[minmax(96px,120px)_minmax(0,1fr)]">
-        <div className="w-full max-w-[120px] overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
+      <div className="grid items-start gap-5 md:grid-cols-[minmax(210px,30%)_minmax(0,70%)]">
+        <div className="w-full max-w-[260px] overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
           {coverUrl ? (
             <img src={coverUrl} alt={title} className="aspect-[2/3] w-full object-cover" />
           ) : (
@@ -209,13 +209,6 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
               className="rounded-full border border-accent-400/40 bg-accent-500/90 px-4 py-2 text-[0.6rem] font-normal uppercase tracking-[0.2em] text-white transition hover:bg-accent-500 disabled:opacity-60"
             >
               {launching ? 'Startar...' : 'Spela nu'}
-            </button>
-            <button
-              type="button"
-              onClick={() => onNavigate({ pageId: 'lumioplay-library' })}
-              className="rounded-full border border-white/15 bg-white/[0.04] px-4 py-2 text-[0.6rem] font-normal uppercase tracking-[0.2em] text-slate-200 transition hover:border-white/25 hover:bg-white/[0.08] hover:text-white"
-            >
-              Öppna bibliotek
             </button>
           </div>
           {launchError ? <p className="text-xs text-rose-300">{launchError}</p> : null}
