@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.37
+
+- Reduced Lumioplay Hero visual footprint (smaller card, tighter spacing, smaller side cover) to better match Home density
+- Added richer hero metadata chips (year, region, play count) sourced from local game metadata
+- Added optional Wikipedia summary lookup for hero titles to enrich description text when available, with graceful fallback
+
 ## 0.3.36
 
 - Fixed home-row launch control flow by adding a shared home input session: `Esc` and configured gamepad-exit combo now stop embedded games started from Lumioplay home surfaces
