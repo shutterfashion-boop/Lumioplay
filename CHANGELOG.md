@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.30
+
+- Added two-stage index fallback for poster sync: strict shortlist first, then relaxed shortlist if strict returns no viable candidates
+- Added safe retry window that can probe top index candidates even when miss-cache filtering would otherwise empty the candidate list
+- Increased index probe depth/timeout in fallback mode to reduce false negatives on punctuation-heavy or metadata-heavy ROM filenames
+
 ## 0.3.29
 
 - Improved generic poster matching for complex ROM filenames without title-specific hardcoding

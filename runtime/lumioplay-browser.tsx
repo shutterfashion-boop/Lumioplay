@@ -117,6 +117,10 @@ const SYSTEM_NAME_BY_PLATFORM: Record<LumioplayConsoleId, string> = {
   ps1: 'Sony - PlayStation',
 }
 
+function stripLikelyFileExtension(value: string): string {
+  return value.replace(/\.[a-z0-9]{1,8}$/i, '')
+}
+
 function normalizePosterLookupValue(value: string): string {
   const normalized = value
     .toLowerCase()
@@ -206,7 +210,7 @@ function normalizePosterCanonicalValue(value: string): string {
 }
 
 function buildCanonicalGameKeys(game: LumioplayGame): string[] {
-  const fileBase = game.fileName.replace(/\.[^/.]+$/, '')
+  const fileBase = stripLikelyFileExtension(game.fileName)
   const rawCandidates = [
     getGameDisplayTitle(game),
     fileBase,
@@ -809,7 +813,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
   if (!normalizedEntry) return -1000
 
     const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
-    const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
+    const fileTitle = normalizePosterLookupValue(stripLikelyFileExtension(game.fileName))
     const titleTokens = Array.from(
       new Set(
         [...buildPosterLookupTokens(displayTitle), ...buildPosterLookupTokens(fileTitle)].filter(
@@ -821,7 +825,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
 
     const normalizedEntryCanonical = normalizePosterCanonicalValue(decoded)
     const displayCanonical = normalizePosterCanonicalValue(getGameDisplayTitle(game))
-    const fileCanonical = normalizePosterCanonicalValue(game.fileName.replace(/\.[^/.]+$/, ''))
+    const fileCanonical = normalizePosterCanonicalValue(stripLikelyFileExtension(game.fileName))
 
     let score = 0
     if (normalizedEntry.startsWith(displayTitle)) score += 80
@@ -882,7 +886,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
       if (!systemName) return
       const systemPath = `/${encodeURIComponent(systemName)}/Named_Boxarts/`
       const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
-      const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
+      const fileTitle = normalizePosterLookupValue(stripLikelyFileExtension(game.fileName))
       const probeTerms = Array.from(new Set([...buildPosterLookupTokens(displayTitle), ...buildPosterLookupTokens(fileTitle)]))
 
       Array.from(missMap.keys()).forEach((url) => {
@@ -903,7 +907,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
     if (entries.length === 0) return null
 
     const displayTitle = normalizePosterLookupValue(getGameDisplayTitle(game))
-    const fileTitle = normalizePosterLookupValue(game.fileName.replace(/\.[^/.]+$/, ''))
+    const fileTitle = normalizePosterLookupValue(stripLikelyFileExtension(game.fileName))
     const probeTerms = Array.from(new Set([...buildPosterLookupTokens(displayTitle), ...buildPosterLookupTokens(fileTitle)]))
     const strictLookupKeys = new Set(buildCanonicalGameKeys(game))
 
@@ -921,31 +925,41 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
       }
     }
 
-    const shortlist = entries
-      .filter((entry) => {
-        const normalizedEntry = normalizePosterLookupValue(safeDecodePosterEntry(entry))
-        const canonicalEntry = normalizePosterCanonicalValue(safeDecodePosterEntry(entry))
-        if (canonicalEntry.length > 0 && strictLookupKeys.has(canonicalEntry)) return true
-        if (probeTerms.length === 0) return true
-        const termHits = probeTerms.reduce((hits, term) => hits + (normalizedEntry.includes(term) ? 1 : 0), 0)
-        const requiredHits =
-          probeTerms.length >= 5
+    const buildShortlist = (relaxed: boolean): Array<{ entry: string; score: number }> =>
+      entries
+        .filter((entry) => {
+          const normalizedEntry = normalizePosterLookupValue(safeDecodePosterEntry(entry))
+          const canonicalEntry = normalizePosterCanonicalValue(safeDecodePosterEntry(entry))
+          if (canonicalEntry.length > 0 && strictLookupKeys.has(canonicalEntry)) return true
+          if (probeTerms.length === 0) return true
+          const termHits = probeTerms.reduce((hits, term) => hits + (normalizedEntry.includes(term) ? 1 : 0), 0)
+          const requiredHits = relaxed
             ? 1
-            : Math.min(2, Math.max(1, probeTerms.length))
-        return termHits >= requiredHits
-      })
-      .map((entry) => ({ entry, score: rankPosterEntryForGame(entry, game) }))
-      .filter((candidate) => candidate.score > -8)
-      .sort((left, right) => right.score - left.score)
-      .slice(0, 40)
+            : probeTerms.length >= 5
+              ? 1
+              : Math.min(2, Math.max(1, probeTerms.length))
+          return termHits >= requiredHits
+        })
+        .map((entry) => ({ entry, score: rankPosterEntryForGame(entry, game) }))
+        .filter((candidate) => candidate.score > (relaxed ? -40 : -8))
+        .sort((left, right) => right.score - left.score)
+        .slice(0, relaxed ? 120 : 40)
+
+    let shortlist = buildShortlist(false)
+    if (shortlist.length === 0) {
+      shortlist = buildShortlist(true)
+    }
 
     if (shortlist.length === 0) return null
 
     const systemName = SYSTEM_NAME_BY_PLATFORM[platform]
     const urls = shortlist.map((candidate) => buildNamedBoxartUrl(systemName, candidate.entry))
     const filteredUrls = options?.forceRefresh ? urls : urls.filter((url) => !isMissCached(url))
-    if (filteredUrls.length === 0) return null
-    return resolveFirstReachableCoverUrl(filteredUrls, { timeoutMs: 4200, maxCandidates: 40 })
+    const retryUrls = filteredUrls.length > 0 ? filteredUrls : urls.slice(0, 30)
+    if (retryUrls.length === 0) return null
+    // Index entries come from the upstream directory listing, so we can trust they exist.
+    // Returning the top-ranked URL directly avoids false negatives from image-probe timeouts.
+    return retryUrls[0]
   }
 
   async function resolvePosterCoverForGame(game: LumioplayGame, options?: { forceRefresh?: boolean }): Promise<string | null> {

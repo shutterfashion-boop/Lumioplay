@@ -48,6 +48,10 @@ function normalizeDiacritics(value: string): string {
   return value.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 }
 
+function stripLikelyFileExtension(value: string): string {
+  return value.replace(/\.[a-z0-9]{1,8}$/i, '')
+}
+
 function createSortTitle(value: string): string {
   return value
     .toLowerCase()
@@ -58,7 +62,7 @@ function createSortTitle(value: string): string {
 function createSearchTitle(value: string, fileName: string): string {
   return `${value} ${fileName}`
     .toLowerCase()
-    .replace(/\.[^/.]+$/, '')
+    .replace(/\.[a-z0-9]{1,8}$/i, '')
     .replace(/[_+.]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim()
@@ -162,12 +166,13 @@ function createTitleVariants(baseTitle: string, fileName?: string): string[] {
   addVariant(variants, baseTitle)
 
   const fromFileName = fileName
-    ?.replace(/\.[^/.]+$/, '')
-    .replace(/\[[^\]]+\]/g, ' ')
-    .replace(/\([^)]*\b(?:rev|beta|proto|sample|hack|demo)\b[^)]*\)/gi, ' ')
-    .replace(/[_+.]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
+    ? stripLikelyFileExtension(fileName)
+        .replace(/\[[^\]]+\]/g, ' ')
+        .replace(/\([^)]*\b(?:rev|beta|proto|sample|hack|demo)\b[^)]*\)/gi, ' ')
+        .replace(/[_+.]+/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    : undefined
   if (fromFileName) {
     let current = fromFileName
     const seen = new Set<string>()
@@ -248,7 +253,7 @@ export function buildCoverCandidates(platform: LumioplayConsoleId, title: string
 }
 
 export function buildMetadataFromFileName(fileName: string, _platform: LumioplayConsoleId): LumioplayGameMetadata {
-  const basename = fileName.replace(/\.[^/.]+$/, '')
+  const basename = stripLikelyFileExtension(fileName)
   const cleanedTitle = trimNoiseTokens(basename)
   const displayTitle = cleanedTitle || basename
   const coverCandidates = buildCoverCandidates(_platform, displayTitle, fileName)
