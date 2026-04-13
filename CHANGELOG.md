@@ -1,5 +1,112 @@
 # Changelog
 
+## 0.4.23
+
+- Restored the gamepad mapping cards to two columns on medium widths while tightening the input/button sizing to avoid overflow
+- Repackaged the plugin as `0.4.23`
+
+## 0.4.22
+
+- Cleaned up the gamepad mapping layout so each binding stacks more safely and no longer overflows into neighboring controls at medium widths
+- Repackaged the plugin as `0.4.22`
+
+## 0.4.21
+
+- Made `Auto-sync` and `Handkontroll` collapsible sections in settings, collapsed by default to reduce visual clutter
+- Repackaged the plugin as `0.4.21`
+
+## 0.4.20
+
+- Removed the duplicate custom homepage checkbox from Lumioplay settings
+- Repackaged the plugin as `0.4.20`
+
+## 0.4.19
+
+- Added SDK `home-override` support and a Lumioplay settings checkbox so the full Lumioplay library view can replace native Home rows as the custom start page
+- Repackaged the plugin as `0.4.19`
+
+## 0.4.18
+
+- Improved hero Wikipedia summary lookup so random hero mode also tries more title variants and a Wikipedia search fallback before showing the plain fallback text
+- Repackaged the plugin as `0.4.18`
+
+## 0.4.17
+
+- In random hero mode, launching a game from the hero now immediately picks a different random hero candidate for when you return to Home
+- Repackaged the plugin as `0.4.17`
+
+## 0.4.16
+
+- Added gamepad mapping support for d-pad directions reported as axes, including learn-mode capture for values like `axis:0:-1`
+- Repackaged the plugin as `0.4.16`
+
+## 0.4.15
+
+- Fixed random hero mode so it picks one game and keeps it stable until reload/session reset instead of reshuffling continuously during background sync polling
+- Repackaged the plugin as `0.4.15`
+
+## 0.4.14
+
+- Increased the hero game cover by about 50px in rendered height using a fixed 233px width
+- Repackaged the plugin as `0.4.14`
+
+## 0.4.13
+
+- Increased the hero game cover to roughly 300px tall by switching the fixed cover width to 200px while keeping the reliable inline sizing approach
+- Repackaged the plugin as `0.4.13`
+
+## 0.4.12
+
+- Replaced the hero cover sizing with inline width/radius styles so the smaller cover size applies even when host Tailwind does not include plugin-only utility classes
+- Repackaged the plugin as `0.4.12`
+
+## 0.4.11
+
+- Shrunk the hero game cover again to a very small fixed size so it stays comfortably within the visual gap between the Lumio logo area and the search row
+- Repackaged the plugin as `0.4.11` after the host-side runtime reload fix so ZIP updates apply immediately
+
+## 0.4.10
+
+- Hard-capped the hero game cover to a small fixed size so it stays within the visual space between the logo area and search row, with extra vertical breathing room
+- Repackaged the plugin as `0.4.10` for a fresh ZIP update in Lumio
+
+## 0.4.9
+
+- Reduced only the hero game cover by another 45% from the `0.4.8` size while keeping the `0.4.6` text/layout treatment intact
+- Repackaged the plugin as `0.4.9` for a fresh ZIP update in Lumio
+
+## 0.4.8
+
+- Restored the `0.4.6` hero text/layout treatment and reduced only the game cover to about 60% of the previous `0.4.6` cover size
+- Repackaged the plugin as `0.4.8` so Lumio picks up the update as a fresh ZIP install
+
+## 0.4.7
+
+- Reduced the Lumioplay Hero cover art to a little over half of the previous visual size so the right-side copy has more room
+- Repackaged the plugin as `0.4.7` for a fresh ZIP install/update
+
+## 0.4.6
+
+- Marked Lumioplay Hero as an explicit native-hero override so Lumio uses the plugin backdrop instead of falling back to the standard movie hero
+- Intended for the host update that keeps override hero backdrops alive across navigation instead of dropping back to the default hero background
+
+## 0.4.5
+
+- Fixed Lumioplay release metadata/runtime version sync after the hero-override regression follow-up
+- Intended for the host-side hero-banner coexistence update so Lumioplay no longer forces the native banner off by default
+
+
+## 0.4.3
+
+- Repackaged Lumioplay as a fresh overwrite release so Lumio can replace older ZIP-installed runtime caches more cleanly
+- Keeps the latest hero layout and bundled default backdrop behavior introduced in recent 0.3.x updates
+
+## 0.3.42
+
+- Increased the Lumioplay Hero cover size again and removed the cover border for the cleaner unboxed look
+- Kept the hero in a strict side-by-side layout with content on the right and the single `Spela nu` action under the copy
+- Continued using the packaged full-hero default backdrop image as the standard background across game hero surfaces
+
 ## 0.3.41
 
 - Enforced a strict horizontal 30/70 hero layout (cover left, text right) without responsive stack fallback

@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import type { PluginHeroProps } from '@/lib/plugin-sdk'
 import { canLaunchGame, canLaunchLibretro, launchGameWithRetroArch, launchLibretroGameEmbedded } from './lumioplay-launcher'
 import { startHomeInputSession } from './lumioplay-home-input'
 import { getGameDisplayTitle } from './lumioplay-metadata'
-import { getEffectivePlatform, getHeroMode, getStoredGames, LUMIOPLAY_PLATFORMS, markGameLaunched } from './lumioplay-storage'
+import { getEffectivePlatform, getHeroEnabled, getHeroMode, getStoredGames, LUMIOPLAY_PLATFORMS, markGameLaunched } from './lumioplay-storage'
 import type { LumioplayConsoleId, LumioplayGame } from './lumioplay-types'
 import defaultLumioplayHeroBackdrop from './assets/lumioplay-hero-default.jpg'
 
@@ -28,6 +28,12 @@ function pickHeroGame(games: LumioplayGame[], mode: 'last_played' | 'random'): L
   return sorted[0] ?? null
 }
 
+function pickRandomHeroId(games: LumioplayGame[], excludeGameId?: string | null): string | null {
+  const playable = games.filter((game) => !game.missing && game.id !== excludeGameId)
+  if (playable.length === 0) return null
+  return playable[Math.floor(Math.random() * playable.length)]?.id ?? null
+}
+
 function truncateSummary(value: string, maxLength: number): string {
   if (value.length <= maxLength) return value
   return `${value.slice(0, Math.max(0, maxLength - 1)).trimEnd()}…`
@@ -41,30 +47,80 @@ function cleanSummaryText(value: string): string {
     .trim()
 }
 
-async function fetchWikipediaSummary(game: LumioplayGame): Promise<string | null> {
-  const title = getGameDisplayTitle(game).trim()
-  if (!title) return null
-  const candidates = [
-    `${title} (video game)`,
-    title,
+function stripLikelyFileExtension(value: string): string {
+  return value.replace(/\.[a-z0-9]{1,8}$/i, '')
+}
+
+function buildWikipediaTitleCandidates(game: LumioplayGame): string[] {
+  const candidates = new Set<string>()
+  const rawValues = [
+    getGameDisplayTitle(game),
+    game.title,
+    game.metadata?.searchTitle?.split(' ').slice(0, 8).join(' ') ?? '',
+    stripLikelyFileExtension(game.fileName),
   ]
-  for (const candidate of candidates) {
-    const encoded = encodeURIComponent(candidate.replace(/\s+/g, ' '))
-    try {
-      const response = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`, {
-        headers: { Accept: 'application/json' },
-      })
-      if (!response.ok) continue
-      const payload = (await response.json()) as { extract?: string; type?: string }
-      if (payload.type === 'disambiguation') continue
-      const extract = typeof payload.extract === 'string' ? cleanSummaryText(payload.extract) : ''
-      if (extract.length === 0) continue
-      return truncateSummary(extract, 220)
-    } catch {
-      continue
+
+  for (const rawValue of rawValues) {
+    const value = rawValue.trim().replace(/\s+/g, ' ')
+    if (!value) continue
+    candidates.add(`${value} (video game)`)
+    candidates.add(value)
+
+    const withoutParens = value.replace(/\s*\([^)]*\)\s*/g, ' ').replace(/\s+/g, ' ').trim()
+    if (withoutParens) {
+      candidates.add(`${withoutParens} (video game)`)
+      candidates.add(withoutParens)
+    }
+
+    const beforeSubtitle = value.replace(/\s*[-:]\s.*$/, '').trim()
+    if (beforeSubtitle) {
+      candidates.add(`${beforeSubtitle} (video game)`)
+      candidates.add(beforeSubtitle)
     }
   }
-  return null
+
+  return Array.from(candidates)
+}
+
+async function fetchWikipediaSummaryByTitle(candidate: string): Promise<string | null> {
+  const encoded = encodeURIComponent(candidate.replace(/\s+/g, ' '))
+  try {
+    const response = await fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${encoded}`, {
+      headers: { Accept: 'application/json' },
+    })
+    if (!response.ok) return null
+    const payload = (await response.json()) as { extract?: string; type?: string }
+    if (payload.type === 'disambiguation') return null
+    const extract = typeof payload.extract === 'string' ? cleanSummaryText(payload.extract) : ''
+    if (extract.length === 0) return null
+    return truncateSummary(extract, 220)
+  } catch {
+    return null
+  }
+}
+
+async function fetchWikipediaSummary(game: LumioplayGame): Promise<string | null> {
+  const candidates = buildWikipediaTitleCandidates(game)
+  for (const candidate of candidates) {
+    const summary = await fetchWikipediaSummaryByTitle(candidate)
+    if (summary) return summary
+  }
+
+  const primaryTitle = getGameDisplayTitle(game).trim() || stripLikelyFileExtension(game.fileName).trim()
+  if (!primaryTitle) return null
+
+  try {
+    const searchResponse = await fetch(
+      `https://en.wikipedia.org/w/api.php?action=opensearch&limit=1&namespace=0&format=json&search=${encodeURIComponent(primaryTitle)}`,
+    )
+    if (!searchResponse.ok) return null
+    const payload = (await searchResponse.json()) as [string, string[]?]
+    const matchedTitle = payload[1]?.[0]?.trim()
+    if (!matchedTitle) return null
+    return await fetchWikipediaSummaryByTitle(matchedTitle)
+  } catch {
+    return null
+  }
 }
 
 export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: PluginHeroProps) {
@@ -72,13 +128,14 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
   const [launching, setLaunching] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
   const [summary, setSummary] = useState<string | null>(null)
-  const [randomSeed, setRandomSeed] = useState(() => Date.now())
+  const [heroEnabled, setHeroEnabledFlag] = useState(() => getHeroEnabled())
+  const [randomHeroId, setRandomHeroId] = useState<string | null>(null)
   const mode = getHeroMode()
 
   useEffect(() => {
     const sync = () => {
       setGames(getStoredGames())
-      if (getHeroMode() === 'random') setRandomSeed(Date.now())
+      setHeroEnabledFlag(getHeroEnabled())
     }
     sync()
     const intervalId = window.setInterval(sync, 3000)
@@ -95,12 +152,29 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
     }
   }, [])
 
-  const heroGame = useMemo(() => {
-    if (mode === 'random') {
-      void randomSeed
+  useEffect(() => {
+    if (!heroEnabled || mode !== 'random') {
+      setRandomHeroId(null)
+      return
     }
+
+    const nextRandomHeroId = pickRandomHeroId(games)
+    if (!nextRandomHeroId) {
+      setRandomHeroId(null)
+      return
+    }
+
+    const currentStillPlayable = games.some((game) => !game.missing && game.id === randomHeroId)
+    if (currentStillPlayable) return
+
+    setRandomHeroId(nextRandomHeroId)
+  }, [games, heroEnabled, mode, randomHeroId])
+
+  const heroGame = useMemo(() => {
+    if (!heroEnabled) return null
+    if (mode === 'random') return games.find((game) => game.id === randomHeroId && !game.missing) ?? null
     return pickHeroGame(games, mode)
-  }, [games, mode, randomSeed])
+  }, [games, heroEnabled, mode, randomHeroId])
 
   useEffect(() => {
     let cancelled = false
@@ -116,7 +190,7 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
     return () => {
       cancelled = true
     }
-  }, [heroGame?.id, randomSeed])
+  }, [heroGame?.id])
 
   useEffect(() => {
     const active = Boolean(heroGame)
@@ -144,6 +218,9 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
       }
       const updated = markGameLaunched(heroGame.id)
       setGames(updated)
+      if (mode === 'random') {
+        setRandomHeroId(pickRandomHeroId(updated, heroGame.id))
+      }
     } catch (error) {
       setLaunchError(error instanceof Error ? error.message : 'Kunde inte starta spelet.')
       onNavigate({ pageId: 'lumioplay-library' })
@@ -160,21 +237,25 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
   const releaseYear = heroGame.metadata?.releaseYear ?? null
   const region = heroGame.metadata?.region ?? null
   const playCount = heroGame.playCount ?? 0
+  const coverShellStyle = {
+    width: '233px',
+    borderRadius: '16px',
+  } satisfies CSSProperties
 
   return (
-    <section className="py-1">
-      <div className="flex items-start gap-6">
-        <div className="w-[30%] min-w-[240px] max-w-[340px] overflow-hidden rounded-xl border border-white/10 bg-slate-900/60">
+    <section className="py-4">
+      <div className="flex items-start gap-8">
+        <div className="shrink-0 overflow-hidden bg-slate-900/35" style={coverShellStyle}>
           {coverUrl ? (
             <img src={coverUrl} alt={title} className="aspect-[2/3] w-full object-cover" />
           ) : (
             <div className="aspect-[2/3] w-full bg-gradient-to-br from-slate-800 to-slate-950" />
           )}
         </div>
-        <div className="w-[70%] min-w-0 space-y-2">
+        <div className="min-w-0 flex-1 space-y-3 pt-2">
           <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Lumioplay Hero</p>
-          <h2 className="text-[1.55rem] font-semibold leading-tight text-white">{title}</h2>
-          <p className="text-[0.95rem] text-slate-300">
+          <h2 className="text-[1.95rem] font-semibold leading-tight text-white">{title}</h2>
+          <p className="max-w-[62ch] text-[1rem] leading-8 text-slate-300">
             {summary ?? (mode === 'random' ? 'Slumpat spel från ditt bibliotek.' : 'Senast spelade spelet från ditt bibliotek.')}
           </p>
           <div className="flex flex-wrap items-center gap-2">
@@ -202,12 +283,12 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
               </span>
             ) : null}
           </div>
-          <div className="flex flex-wrap items-center gap-2 pt-0.5">
+          <div className="flex flex-wrap items-center gap-2 pt-1">
             <button
               type="button"
               onClick={() => void handlePlay()}
               disabled={launching}
-              className="rounded-full border border-accent-400/40 bg-accent-500/90 px-4 py-2 text-[0.6rem] font-normal uppercase tracking-[0.2em] text-white transition hover:bg-accent-500 disabled:opacity-60"
+              className="rounded-full border border-accent-400/40 bg-accent-500/90 px-6 py-2.5 text-[0.6rem] font-normal uppercase tracking-[0.2em] text-white transition hover:bg-accent-500 disabled:opacity-60"
             >
               {launching ? 'Startar...' : 'Spela nu'}
             </button>

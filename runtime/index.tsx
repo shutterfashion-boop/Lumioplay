@@ -1,5 +1,5 @@
 import type { LumioPlugin } from '@/lib/plugin-sdk'
-import { LumioplayBrowsePage } from './lumioplay-browser'
+import { LumioplayBrowsePage, LumioplayHomeOverride } from './lumioplay-browser'
 import { LumioplayFavoritesHomeRow } from './lumioplay-home-row'
 import { LumioplayHero } from './lumioplay-hero'
 import { LumioplaySettingsSection } from './lumioplay-settings-section'
@@ -7,7 +7,7 @@ import { LumioplaySettingsSection } from './lumioplay-settings-section'
 export const LumioplayPlugin: LumioPlugin = {
   id: 'com.lumio.lumioplay',
   name: { en: 'Lumioplay', sv: 'Lumioplay' },
-  version: '0.3.41',
+  version: '0.4.23',
   description: {
     en: 'Browse local ROMs and launch retro games directly inside Lumio via embedded libretro.',
     sv: 'Bladdra bland lokala ROMs och starta retrospel direkt i Lumio via inbäddad libretro.',
@@ -25,6 +25,11 @@ export const LumioplayPlugin: LumioPlugin = {
       id: 'lumioplay-library',
       label: { en: 'Games', sv: 'Spel' },
       Page: LumioplayBrowsePage,
+    })
+    ctx.registerHomeOverride({
+      id: 'lumioplay-home',
+      label: { en: 'Lumioplay', sv: 'Lumioplay' },
+      View: LumioplayHomeOverride,
     })
 
     ctx.registerMainMenuItem({
@@ -50,6 +55,7 @@ export const LumioplayPlugin: LumioPlugin = {
     ctx.registerHero({
       id: 'lumioplay-hero',
       Hero: LumioplayHero,
+      blocksNativeHero: true,
     })
   },
 }

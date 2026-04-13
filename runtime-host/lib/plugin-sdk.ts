@@ -98,6 +98,19 @@ export interface PluginHeroProps {
 export interface PluginHeroContribution {
   id: string
   Hero: React.ComponentType<PluginHeroProps>
+  blocksNativeHero?: boolean
+}
+
+export interface HomeOverrideProps {
+  onNavigate: (target: BrowsePageTarget) => void
+  onOpenDetails: (item: unknown) => void
+}
+
+export interface HomeOverrideContribution {
+  id: string
+  label?: PluginText
+  pluginId?: string
+  View: React.ComponentType<HomeOverrideProps>
 }
 
 export interface BrowsePageContribution {
@@ -118,6 +131,7 @@ export interface PluginContext {
   registerHomeRow(row: HomeRowContribution): void
   registerHomeSource(source: HomeSourceContribution): void
   registerHero(hero: PluginHeroContribution): void
+  registerHomeOverride(homeOverride: HomeOverrideContribution): void
   registerBrowsePage(page: BrowsePageContribution): void
   registerMainMenuItem(item: NavigationItemContribution): void
   registerTopbarItem(item: NavigationItemContribution): void

@@ -25,6 +25,20 @@ let comboHeld = false
 let rafId = 0
 let unlistenLibretroStopped: (() => void) | null = null
 
+function isMappingPressed(mappingValue: string | undefined, pad: Gamepad): boolean {
+  if (!mappingValue) return false
+  if (/^\d+$/.test(mappingValue)) {
+    const buttonIndex = Number(mappingValue)
+    return Boolean(pad.buttons[buttonIndex]?.pressed)
+  }
+  const axisMatch = mappingValue.match(/^axis:(\d+):([+-]1)$/)
+  if (!axisMatch) return false
+  const axisIndex = Number(axisMatch[1])
+  const direction = axisMatch[2]
+  const axisValue = pad.axes[axisIndex] ?? 0
+  return direction === '-1' ? axisValue <= -0.5 : axisValue >= 0.5
+}
+
 function mergeInputStates(): boolean[] {
   return Array.from({ length: JOYPAD_BUTTON_COUNT }, (_, index) => {
     return Boolean(keyboardState[index] || gamepadState[index])
@@ -82,10 +96,9 @@ function onFrame() {
   if (pad) {
     Object.entries(mapping).forEach(([joypadIndexRaw, gamepadButtonRaw]) => {
       const joypadIndex = Number(joypadIndexRaw)
-      const gamepadButtonIndex = Number(gamepadButtonRaw)
-      if (!Number.isFinite(joypadIndex) || !Number.isFinite(gamepadButtonIndex)) return
-      if (joypadIndex < 0 || joypadIndex >= JOYPAD_BUTTON_COUNT || gamepadButtonIndex < 0) return
-      nextState[joypadIndex] = Boolean(pad.buttons[gamepadButtonIndex]?.pressed)
+      if (!Number.isFinite(joypadIndex)) return
+      if (joypadIndex < 0 || joypadIndex >= JOYPAD_BUTTON_COUNT) return
+      nextState[joypadIndex] = isMappingPressed(String(gamepadButtonRaw), pad)
     })
 
     const comboPressed =

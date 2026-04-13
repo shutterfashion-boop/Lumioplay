@@ -41,7 +41,7 @@ import {
   setLibretroBounds,
   stopLibretroGame,
 } from './lumioplay-launcher'
-import type { BrowsePageProps } from '@/lib/plugin-sdk'
+import type { BrowsePageProps, HomeOverrideProps } from '@/lib/plugin-sdk'
 import type { LumioplayConsoleId, LumioplayGame, LumioplayPlatformId } from './lumioplay-types'
 
 const neutralPillClass =
@@ -66,6 +66,19 @@ const KEYBOARD_TO_JOYPAD: Record<string, number> = {
   KeyW: 11,
 }
 const JOYPAD_BUTTON_COUNT = 16
+function isMappingPressed(mappingValue: string | undefined, pad: Gamepad): boolean {
+  if (!mappingValue) return false
+  if (/^\d+$/.test(mappingValue)) {
+    const buttonIndex = Number(mappingValue)
+    return Boolean(pad.buttons[buttonIndex]?.pressed)
+  }
+  const axisMatch = mappingValue.match(/^axis:(\d+):([+-]1)$/)
+  if (!axisMatch) return false
+  const axisIndex = Number(axisMatch[1])
+  const direction = axisMatch[2]
+  const axisValue = pad.axes[axisIndex] ?? 0
+  return direction === '-1' ? axisValue <= -0.5 : axisValue >= 0.5
+}
 const POSTER_SYNC_CONCURRENCY = 3
 const POSTER_SYNC_BATCH_SIZE = 20
 const POSTER_SYNC_AUTO_LIMIT = 10
@@ -630,10 +643,9 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
       if (pad) {
         Object.entries(gamepadMapping).forEach(([joypadIndexRaw, gamepadButtonRaw]) => {
           const joypadIndex = Number(joypadIndexRaw)
-          const gamepadButtonIndex = Number(gamepadButtonRaw)
-          if (!Number.isFinite(joypadIndex) || !Number.isFinite(gamepadButtonIndex)) return
-          if (joypadIndex < 0 || joypadIndex >= JOYPAD_BUTTON_COUNT || gamepadButtonIndex < 0) return
-          const pressed = Boolean(pad.buttons[gamepadButtonIndex]?.pressed)
+          if (!Number.isFinite(joypadIndex)) return
+          if (joypadIndex < 0 || joypadIndex >= JOYPAD_BUTTON_COUNT) return
+          const pressed = isMappingPressed(String(gamepadButtonRaw), pad)
           nextState[joypadIndex] = pressed
         })
 
@@ -1431,5 +1443,14 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
         </div>
       )}
     </div>
+  )
+}
+
+export function LumioplayHomeOverride({ onNavigate }: HomeOverrideProps) {
+  return (
+    <LumioplayBrowsePage
+      pageId="lumioplay-library"
+      onNavigate={onNavigate}
+    />
   )
 }
