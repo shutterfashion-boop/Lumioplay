@@ -14,7 +14,7 @@ const KEY_GAMES = 'lumioplay_games'
 const KEY_ROM_FOLDERS = 'lumioplay_rom_folders'
 const KEY_RETROARCH_PATH = 'lumioplay_retroarch_path'
 const KEY_RETROARCH_CORES_PATH = 'lumioplay_retroarch_cores_path'
-const KEY_GAMEPAD_MAPPING = 'lumioplay_gamepad_mapping_v1'
+const KEY_GAMEPAD_MAPPING = 'lumioplay_gamepad_mapping_v2'
 const KEY_GAMEPAD_EXIT_COMBO = 'lumioplay_gamepad_exit_combo_v1'
 
 const DEFAULT_SETTINGS: LumioplayLibrarySettings = {
@@ -23,6 +23,7 @@ const DEFAULT_SETTINGS: LumioplayLibrarySettings = {
   romFolders: [],
   autoSyncEnabled: false,
   autoSyncIntervalSeconds: 45,
+  heroEnabled: false,
   heroMode: 'last_played',
 }
 
@@ -61,19 +62,19 @@ export const LUMIOPLAY_JOYPAD_BINDINGS: Array<{ index: number; label: string }> 
   { index: 11, label: 'R' },
 ]
 
-const DEFAULT_GAMEPAD_MAPPING: Record<number, number> = {
-  0: 1,   // B
-  1: 2,   // Y
-  2: 8,   // Select
-  3: 9,   // Start
-  4: 12,  // Up
-  5: 13,  // Down
-  6: 14,  // Left
-  7: 15,  // Right
-  8: 0,   // A
-  9: 3,   // X
-  10: 4,  // L
-  11: 5,  // R
+const DEFAULT_GAMEPAD_MAPPING: Record<number, string> = {
+  0: '1',   // B
+  1: '2',   // Y
+  2: '8',   // Select
+  3: '9',   // Start
+  4: '12',  // Up
+  5: '13',  // Down
+  6: '14',  // Left
+  7: '15',  // Right
+  8: '0',   // A
+  9: '3',   // X
+  10: '4',  // L
+  11: '5',  // R
 }
 
 const DEFAULT_GAMEPAD_EXIT_COMBO = [8, 9] // Select + Start
@@ -91,6 +92,46 @@ function createEmptyLibrary(): LumioplayLibraryDatabase {
   }
 }
 
+function parseStoredArray<T>(key: string): T[] {
+  const raw = getScopedStorageItem(key)
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    return Array.isArray(parsed) ? (parsed as T[]) : []
+  } catch {
+    return []
+  }
+}
+
+function sanitizePersistedLibraryRaw(raw: string | null): string | null {
+  if (!raw) return null
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return null
+    const candidate = parsed as Partial<LumioplayLibraryDatabase>
+    if (!Array.isArray(candidate.games) || !candidate.settings || typeof candidate.settings !== 'object' || Array.isArray(candidate.settings)) {
+      return null
+    }
+
+    // Defensive plugin-side mitigation:
+    // older libraries could keep auto-sync enabled with problematic saved folders.
+    // Persist it as disabled until the user explicitly enables it again.
+    if ((candidate.settings as Partial<LumioplayLibrarySettings>).autoSyncEnabled === true) {
+      return JSON.stringify({
+        ...candidate,
+        settings: {
+          ...candidate.settings,
+          autoSyncEnabled: false,
+        },
+      })
+    }
+
+    return raw
+  } catch {
+    return null
+  }
+}
+
 function normalizeLibrarySettings(value?: Partial<LumioplayLibrarySettings> | null): LumioplayLibrarySettings {
   return {
     retroArchPath: value?.retroArchPath?.trim() ?? DEFAULT_SETTINGS.retroArchPath,
@@ -98,6 +139,7 @@ function normalizeLibrarySettings(value?: Partial<LumioplayLibrarySettings> | nu
     romFolders: Array.isArray(value?.romFolders) ? value!.romFolders.filter(Boolean) : DEFAULT_SETTINGS.romFolders,
     autoSyncEnabled: value?.autoSyncEnabled ?? DEFAULT_SETTINGS.autoSyncEnabled,
     autoSyncIntervalSeconds: Math.max(15, Math.min(300, Number(value?.autoSyncIntervalSeconds ?? DEFAULT_SETTINGS.autoSyncIntervalSeconds))),
+    heroEnabled: typeof value?.heroEnabled === 'boolean' ? value.heroEnabled : DEFAULT_SETTINGS.heroEnabled,
     heroMode: value?.heroMode === 'random' ? 'random' : 'last_played',
   }
 }
@@ -210,13 +252,10 @@ function normalizeGames(games: LumioplayGame[]): LumioplayGame[] {
 }
 
 function migrateLegacyLibrary(): LumioplayLibraryDatabase {
-  const rawGames = getScopedStorageItem(KEY_GAMES)
-  const rawFolders = getScopedStorageItem(KEY_ROM_FOLDERS)
+  const games = parseStoredArray<LumioplayGame>(KEY_GAMES)
+  const romFolders = parseStoredArray<string>(KEY_ROM_FOLDERS).filter(Boolean)
   const retroArchPath = getScopedStorageItem(KEY_RETROARCH_PATH) ?? ''
   const retroArchCoresPath = getScopedStorageItem(KEY_RETROARCH_CORES_PATH) ?? ''
-
-  const games = rawGames ? (JSON.parse(rawGames) as LumioplayGame[]) : []
-  const romFolders = rawFolders ? (JSON.parse(rawFolders) as string[]) : []
 
   return {
     version: 2,
@@ -252,7 +291,7 @@ function migrateLegacyLibrary(): LumioplayLibraryDatabase {
 
 export function getLibrary(): LumioplayLibraryDatabase {
   try {
-    const raw = getScopedStorageItem(KEY_LIBRARY)
+    const raw = sanitizePersistedLibraryRaw(getScopedStorageItem(KEY_LIBRARY))
     if (raw) {
       const parsed = JSON.parse(raw) as Partial<LumioplayLibraryDatabase>
       const normalizedGames = (parsed.games ?? [])
@@ -590,6 +629,20 @@ export function setAutoSyncIntervalSeconds(value: number): void {
   }))
 }
 
+export function getHeroEnabled(): boolean {
+  return getLibrary().settings.heroEnabled
+}
+
+export function setHeroEnabled(value: boolean): void {
+  updateLibrary((library) => ({
+    ...library,
+    settings: {
+      ...library.settings,
+      heroEnabled: Boolean(value),
+    },
+  }))
+}
+
 export function getHeroMode(): 'last_played' | 'random' {
   return getLibrary().settings.heroMode
 }
@@ -604,15 +657,24 @@ export function setHeroMode(value: 'last_played' | 'random'): void {
   }))
 }
 
-function normalizeGamepadMapping(raw: unknown): Record<number, number> {
-  const next: Record<number, number> = { ...DEFAULT_GAMEPAD_MAPPING }
+function normalizeMappingValue(value: unknown): string | null {
+  if (typeof value === 'number' && Number.isFinite(value) && value >= 0) {
+    return String(Math.floor(value))
+  }
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim().toLowerCase()
+  if (/^\d+$/.test(trimmed)) return trimmed
+  if (/^axis:\d+:[+-]1$/.test(trimmed)) return trimmed
+  return null
+}
+
+function normalizeGamepadMapping(raw: unknown): Record<number, string> {
+  const next: Record<number, string> = { ...DEFAULT_GAMEPAD_MAPPING }
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return next
 
   for (const binding of LUMIOPLAY_JOYPAD_BINDINGS) {
-    const value = Number((raw as Record<string, unknown>)[String(binding.index)])
-    if (Number.isFinite(value) && value >= 0) {
-      next[binding.index] = Math.floor(value)
-    }
+    const normalized = normalizeMappingValue((raw as Record<string, unknown>)[String(binding.index)])
+    if (normalized) next[binding.index] = normalized
   }
   return next
 }
@@ -626,7 +688,7 @@ function normalizeExitCombo(raw: unknown): number[] {
   return values.length > 0 ? Array.from(new Set(values)).slice(0, 4) : [...DEFAULT_GAMEPAD_EXIT_COMBO]
 }
 
-export function getGamepadMapping(): Record<number, number> {
+export function getGamepadMapping(): Record<number, string> {
   try {
     const raw = getScopedStorageItem(KEY_GAMEPAD_MAPPING)
     if (!raw) return { ...DEFAULT_GAMEPAD_MAPPING }
@@ -636,7 +698,7 @@ export function getGamepadMapping(): Record<number, number> {
   }
 }
 
-export function setGamepadMapping(mapping: Record<number, number>): void {
+export function setGamepadMapping(mapping: Record<number, string>): void {
   const normalized = normalizeGamepadMapping(mapping)
   setScopedStorageItem(KEY_GAMEPAD_MAPPING, JSON.stringify(normalized))
 }
