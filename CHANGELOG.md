@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.4.24
+
+- Added console-specific grid and cover aspect profiles in the library for SNES, GBA, N64, and PS1
+- Switched game cover rendering to `object-contain` to prevent cover art cropping in the grid
+- Repackaged the plugin as `0.4.24`
+
 ## 0.4.23
 
 - Restored the gamepad mapping cards to two columns on medium widths while tightening the input/button sizing to avoid overflow
