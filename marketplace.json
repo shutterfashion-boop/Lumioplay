@@ -1,0 +1,28 @@
+{
+  "id": "lumioplay-source",
+  "name": "Lumioplay Source",
+  "description": "External source for the Lumioplay plugin.",
+  "repoUrl": "https://github.com/shutterfashion-boop/Lumioplay",
+  "plugins": [
+    {
+      "id": "com.lumio.lumioplay",
+      "slug": "lumioplay",
+      "name": {
+        "en": "Lumioplay",
+        "sv": "Lumioplay"
+      },
+      "version": "0.4.25",
+      "description": {
+        "en": "Browse local ROMs and launch retro games directly inside Lumio via embedded libretro.",
+        "sv": "Bladdra bland lokala ROMs och starta retrospel direkt i Lumio via inbaddad libretro."
+      },
+      "path": "",
+      "runtimeBundlePath": "dist/runtime.js",
+      "readmePath": "README.md",
+      "changelogPath": "CHANGELOG.md",
+      "official": false,
+      "bundled": false,
+      "removable": true
+    }
+  ]
+}
