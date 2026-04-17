@@ -143,6 +143,9 @@ export interface LumioPlugin {
   version: string
   description?: PluginText
   preinstalled?: boolean
+  visibility?: {
+    hideOnLanClient?: boolean
+  }
   register(ctx: PluginContext): void
 }
 

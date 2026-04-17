@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.26
+
+- Added plugin visibility metadata support for `hideOnLanClient` in the Lumioplay runtime-host SDK typings.
+- Set Lumioplay to `hideOnLanClient` so plugin surfaces are hidden on LAN client sessions.
+
 ## 0.4.25
 
 - Rolled back the 0.4.24 console-specific grid profile changes to isolate a plugin-loading regression.
