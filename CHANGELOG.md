@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.25
+
+- Rolled back the 0.4.24 console-specific grid profile changes to isolate a plugin-loading regression.
+- Repackaged rollback baseline as `0.4.25` so Lumio clients can update forward without manual downgrade.
+
 ## 0.4.23
 
 - Restored the gamepad mapping cards to two columns on medium widths while tightening the input/button sizing to avoid overflow
