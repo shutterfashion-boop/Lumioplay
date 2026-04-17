@@ -11,7 +11,7 @@
     LumioplayPlugin: () => LumioplayPlugin
   });
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-1TrToo/react-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7nH3SX/react-shim.ts
   var react = globalThis.__lumioPluginRuntime?.react ?? globalThis.React;
   if (!react) {
     throw new Error("Lumio plugin runtime host has not initialized React.");
@@ -1034,7 +1034,7 @@
     await launchLibretroGame(corePath, game.romPath);
   }
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-1TrToo/jsx-runtime-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7nH3SX/jsx-runtime-shim.ts
   var runtime = globalThis.__lumioPluginRuntime?.jsxRuntime;
   if (!runtime) {
     throw new Error("Lumio plugin runtime host has not initialized JSX runtime.");
@@ -3169,7 +3169,7 @@
   var LumioplayPlugin = {
     id: "com.lumio.lumioplay",
     name: { en: "Lumioplay", sv: "Lumioplay" },
-    version: "0.4.26",
+    version: "0.4.27",
     description: {
       en: "Browse local ROMs and launch retro games directly inside Lumio via embedded libretro.",
       sv: "Bladdra bland lokala ROMs och starta retrospel direkt i Lumio via inb\xE4ddad libretro."
@@ -3219,7 +3219,7 @@
     }
   };
 
-  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-1TrToo/wrapper-entry.ts
+  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7nH3SX/wrapper-entry.ts
   var plugin = Reflect.get(runtime_exports, "default") ?? Reflect.get(runtime_exports, "LumioplayPlugin") ?? Object.values(runtime_exports).find((value) => value && typeof value === "object" && "id" in value && "register" in value);
   if (!plugin) {
     throw new Error("Could not find Lumioplay plugin export in bundle.");

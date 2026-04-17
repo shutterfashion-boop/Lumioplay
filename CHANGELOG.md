@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.27
+
+- Added source-manifest visibility metadata (`hideOnLanClient`) so host-side LAN filtering can honor Lumioplay hide rules even when runtime cache is stale.
+- Repackaged the plugin as `0.4.27`.
+
 ## 0.4.26
 
 - Added plugin visibility metadata support for `hideOnLanClient` in the Lumioplay runtime-host SDK typings.
