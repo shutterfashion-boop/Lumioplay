@@ -11,7 +11,7 @@
     LumioplayPlugin: () => LumioplayPlugin
   });
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7nH3SX/react-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-gUJbFN/react-shim.ts
   var react = globalThis.__lumioPluginRuntime?.react ?? globalThis.React;
   if (!react) {
     throw new Error("Lumio plugin runtime host has not initialized React.");
@@ -1034,7 +1034,7 @@
     await launchLibretroGame(corePath, game.romPath);
   }
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7nH3SX/jsx-runtime-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-gUJbFN/jsx-runtime-shim.ts
   var runtime = globalThis.__lumioPluginRuntime?.jsxRuntime;
   if (!runtime) {
     throw new Error("Lumio plugin runtime host has not initialized JSX runtime.");
@@ -1251,6 +1251,32 @@
       return getGameDisplayTitle(left).localeCompare(getGameDisplayTitle(right), "sv");
     });
   }
+  var DEFAULT_GRID_PROFILE = {
+    containerClassName: "grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6",
+    posterAspectClassName: "aspect-[2/3]"
+  };
+  var GRID_PROFILE_BY_PLATFORM = {
+    snes: {
+      containerClassName: "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3",
+      posterAspectClassName: "aspect-[4/3]"
+    },
+    gba: {
+      containerClassName: "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4",
+      posterAspectClassName: "aspect-[3/2]"
+    },
+    n64: {
+      containerClassName: "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4",
+      posterAspectClassName: "aspect-square"
+    },
+    ps1: {
+      containerClassName: "grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4",
+      posterAspectClassName: "aspect-square"
+    }
+  };
+  function getGridProfileForPlatform(platform) {
+    if (platform === "all") return DEFAULT_GRID_PROFILE;
+    return GRID_PROFILE_BY_PLATFORM[platform] ?? DEFAULT_GRID_PROFILE;
+  }
   function PlatformChips({
     active,
     onChange,
@@ -1341,6 +1367,7 @@
   }
   function GamesGrid({
     games,
+    activePlatform,
     launchState,
     editingGameId,
     onEditGame,
@@ -1351,26 +1378,28 @@
   }) {
     const platformOptions = getPlatformOptions();
     const coreSuggestions = getCoreSuggestions();
+    const gridProfile = getGridProfileForPlatform(activePlatform);
     if (games.length === 0) {
       return /* @__PURE__ */ jsx("div", { className: "rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-sm text-slate-400", children: "Inga spel hittades \xE4nnu. L\xE4gg till ROM-filer eller v\xE4lj en ROM-mapp i inst\xE4llningarna." });
     }
-    return /* @__PURE__ */ jsx("div", { className: "grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6", children: games.map((game) => {
+    return /* @__PURE__ */ jsx("div", { className: gridProfile.containerClassName, children: games.map((game) => {
       const effectivePlatform = getEffectivePlatform(game);
       const effectiveCore = getEffectiveCoreId(game);
       const editing = editingGameId === game.id;
       const displayCoverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null;
+      const posterAspectClassName = getGridProfileForPlatform(effectivePlatform).posterAspectClassName;
       return /* @__PURE__ */ jsxs(
         "div",
         {
           className: `group w-full cursor-pointer bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${game.missing ? "opacity-70" : ""}`,
           children: [
-            /* @__PURE__ */ jsxs("div", { className: "relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900", children: [
+            /* @__PURE__ */ jsxs("div", { className: `relative ${posterAspectClassName} overflow-hidden bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900`, children: [
               displayCoverUrl ? /* @__PURE__ */ jsx(
                 "img",
                 {
                   src: displayCoverUrl,
                   alt: getGameDisplayTitle(game),
-                  className: "h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]",
+                  className: "h-full w-full object-contain transition duration-500 group-hover:scale-[1.04]",
                   onError: (event) => {
                     event.currentTarget.style.display = "none";
                   }
@@ -2171,6 +2200,7 @@
         GamesGrid,
         {
           games: filteredGames,
+          activePlatform: resolvedPlatform,
           launchState,
           editingGameId,
           onEditGame: setEditingGameId,
@@ -3219,7 +3249,7 @@
     }
   };
 
-  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7nH3SX/wrapper-entry.ts
+  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-gUJbFN/wrapper-entry.ts
   var plugin = Reflect.get(runtime_exports, "default") ?? Reflect.get(runtime_exports, "LumioplayPlugin") ?? Object.values(runtime_exports).find((value) => value && typeof value === "object" && "id" in value && "register" in value);
   if (!plugin) {
     throw new Error("Could not find Lumioplay plugin export in bundle.");

@@ -273,6 +273,40 @@ function sortGames(games: LumioplayGame[], platform: LumioplayPlatformId, query:
     })
 }
 
+type GridProfile = {
+  containerClassName: string
+  posterAspectClassName: string
+}
+
+const DEFAULT_GRID_PROFILE: GridProfile = {
+  containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6',
+  posterAspectClassName: 'aspect-[2/3]',
+}
+
+const GRID_PROFILE_BY_PLATFORM: Partial<Record<LumioplayConsoleId, GridProfile>> = {
+  snes: {
+    containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3',
+    posterAspectClassName: 'aspect-[4/3]',
+  },
+  gba: {
+    containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4',
+    posterAspectClassName: 'aspect-[3/2]',
+  },
+  n64: {
+    containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4',
+    posterAspectClassName: 'aspect-square',
+  },
+  ps1: {
+    containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4',
+    posterAspectClassName: 'aspect-square',
+  },
+}
+
+function getGridProfileForPlatform(platform: LumioplayPlatformId): GridProfile {
+  if (platform === 'all') return DEFAULT_GRID_PROFILE
+  return GRID_PROFILE_BY_PLATFORM[platform] ?? DEFAULT_GRID_PROFILE
+}
+
 function PlatformChips({
   active,
   onChange,
@@ -392,6 +426,7 @@ function StarButton({
 
 function GamesGrid({
   games,
+  activePlatform,
   launchState,
   editingGameId,
   onEditGame,
@@ -401,6 +436,7 @@ function GamesGrid({
   onCoreOverrideChange,
 }: {
   games: LumioplayGame[]
+  activePlatform: LumioplayPlatformId
   launchState: { gameId: string | null; message: string | null }
   editingGameId: string | null
   onEditGame: (gameId: string | null) => void
@@ -411,6 +447,7 @@ function GamesGrid({
 }) {
   const platformOptions = getPlatformOptions()
   const coreSuggestions = getCoreSuggestions()
+  const gridProfile = getGridProfileForPlatform(activePlatform)
 
   if (games.length === 0) {
     return (
@@ -421,24 +458,25 @@ function GamesGrid({
   }
 
   return (
-    <div className="grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6">
+    <div className={gridProfile.containerClassName}>
       {games.map((game) => {
         const effectivePlatform = getEffectivePlatform(game)
         const effectiveCore = getEffectiveCoreId(game)
         const editing = editingGameId === game.id
         const displayCoverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null
+        const posterAspectClassName = getGridProfileForPlatform(effectivePlatform).posterAspectClassName
 
         return (
           <div
             key={game.id}
             className={`group w-full cursor-pointer bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${game.missing ? 'opacity-70' : ''}`}
           >
-            <div className="relative aspect-[2/3] overflow-hidden bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900">
+            <div className={`relative ${posterAspectClassName} overflow-hidden bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900`}>
               {displayCoverUrl ? (
                 <img
                   src={displayCoverUrl}
                   alt={getGameDisplayTitle(game)}
-                  className="h-full w-full object-cover transition duration-500 group-hover:scale-[1.04]"
+                  className="h-full w-full object-contain transition duration-500 group-hover:scale-[1.04]"
                   onError={(event) => {
                     event.currentTarget.style.display = 'none'
                   }}
@@ -1378,6 +1416,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
       </div>
       <GamesGrid
         games={filteredGames}
+        activePlatform={resolvedPlatform}
         launchState={launchState}
         editingGameId={editingGameId}
         onEditGame={setEditingGameId}
