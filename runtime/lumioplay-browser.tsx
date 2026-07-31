@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import {
   getScopedStorageItem,
   isPluginDesktopHost,
@@ -273,38 +273,47 @@ function sortGames(games: LumioplayGame[], platform: LumioplayPlatformId, query:
     })
 }
 
+// Cover art proportions differ per console: SNES/GBA boxes are landscape,
+// NES/Genesis/PS1 are portrait, N64/Game Boy are near-square. Forcing every
+// grid cell to a single portrait ratio squishes the landscape art.
+//
+// Applied as INLINE STYLES, not Tailwind classes: the plugin runtime is
+// built separately from the host app, so the app's Tailwind pass never sees
+// these class names and arbitrary utilities like `aspect-[4/3]` would have
+// no CSS rule at all. Inline styles are self-contained.
+//
+// `aspectRatio` = width / height of the cover. `minColWidth` drives a
+// responsive auto-fill grid — wider art gets a larger minimum so fewer,
+// bigger cells fit per row.
 type GridProfile = {
-  containerClassName: string
-  posterAspectClassName: string
+  aspectRatio: number
+  minColWidth: number
 }
 
-const DEFAULT_GRID_PROFILE: GridProfile = {
-  containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-4 xl:grid-cols-6',
-  posterAspectClassName: 'aspect-[2/3]',
-}
+const DEFAULT_GRID_PROFILE: GridProfile = { aspectRatio: 2 / 3, minColWidth: 150 }
 
-const GRID_PROFILE_BY_PLATFORM: Partial<Record<LumioplayConsoleId, GridProfile>> = {
-  snes: {
-    containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-3',
-    posterAspectClassName: 'aspect-[4/3]',
-  },
-  gba: {
-    containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4',
-    posterAspectClassName: 'aspect-[3/2]',
-  },
-  n64: {
-    containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4',
-    posterAspectClassName: 'aspect-square',
-  },
-  ps1: {
-    containerClassName: 'grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4',
-    posterAspectClassName: 'aspect-square',
-  },
+const GRID_PROFILE_BY_PLATFORM: Record<LumioplayConsoleId, GridProfile> = {
+  nes: { aspectRatio: 0.71, minColWidth: 150 },       // portrait box
+  snes: { aspectRatio: 4 / 3, minColWidth: 240 },     // landscape box
+  gb: { aspectRatio: 0.90, minColWidth: 165 },        // small near-square box
+  gbc: { aspectRatio: 0.90, minColWidth: 165 },
+  gba: { aspectRatio: 3 / 2, minColWidth: 235 },      // landscape box
+  genesis: { aspectRatio: 0.72, minColWidth: 150 },   // tall VHS-style box
+  n64: { aspectRatio: 0.92, minColWidth: 185 },       // near-square box
+  ps1: { aspectRatio: 0.69, minColWidth: 150 },       // portrait jewel case
 }
 
 function getGridProfileForPlatform(platform: LumioplayPlatformId): GridProfile {
   if (platform === 'all') return DEFAULT_GRID_PROFILE
   return GRID_PROFILE_BY_PLATFORM[platform] ?? DEFAULT_GRID_PROFILE
+}
+
+function gridContainerStyle(profile: GridProfile): CSSProperties {
+  return {
+    display: 'grid',
+    gap: '0.75rem',
+    gridTemplateColumns: `repeat(auto-fill, minmax(${profile.minColWidth}px, 1fr))`,
+  }
 }
 
 function PlatformChips({
@@ -458,20 +467,20 @@ function GamesGrid({
   }
 
   return (
-    <div className={gridProfile.containerClassName}>
+    <div style={gridContainerStyle(gridProfile)}>
       {games.map((game) => {
         const effectivePlatform = getEffectivePlatform(game)
         const effectiveCore = getEffectiveCoreId(game)
         const editing = editingGameId === game.id
         const displayCoverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null
-        const posterAspectClassName = getGridProfileForPlatform(effectivePlatform).posterAspectClassName
+        const posterAspectRatio = getGridProfileForPlatform(effectivePlatform).aspectRatio
 
         return (
           <div
             key={game.id}
             className={`group w-full cursor-pointer bg-transparent text-left transition-all duration-300 hover:-translate-y-1 ${game.missing ? 'opacity-70' : ''}`}
           >
-            <div className={`relative ${posterAspectClassName} overflow-hidden bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900`}>
+            <div className="relative overflow-hidden bg-gradient-to-br from-slate-800 via-slate-700 to-slate-900" style={{ aspectRatio: String(posterAspectRatio) }}>
               {displayCoverUrl ? (
                 <img
                   src={displayCoverUrl}
