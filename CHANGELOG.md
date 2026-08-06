@@ -1,5 +1,17 @@
 # Changelog
 
+
+## 0.4.31
+
+- Swedish/English throughout, following the app language picker. Every
+  string was hardcoded before, most of them Swedish, and the plugin could
+  not reach the host translator at all because it bundles its own SDK copy.
+- Fix RetroArch setup validation, which decided success by string-comparing
+  its own status text and would have failed in every language once that
+  text was translated.
+- Game sorting uses the active language instead of a fixed Swedish
+  collation, and the example paths no longer embed a developer username.
+
 ## 0.4.27
 
 - Added source-manifest visibility metadata (`hideOnLanClient`) so host-side LAN filtering can honor Lumioplay hide rules even when runtime cache is stale.

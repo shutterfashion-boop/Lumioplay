@@ -1,6 +1,6 @@
 {
   "name": "lumioplay",
-  "version": "0.4.27",
+  "version": "0.4.31",
   "private": true,
   "type": "module",
   "scripts": {

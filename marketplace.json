@@ -11,7 +11,7 @@
         "en": "Lumioplay",
         "sv": "Lumioplay"
       },
-      "version": "0.4.30",
+      "version": "0.4.31",
       "description": {
         "en": "Browse local ROMs and launch retro games directly inside Lumio via embedded libretro.",
         "sv": "Bläddra bland lokala ROM:ar och starta retrospel direkt i Lumio via inbäddad libretro."
