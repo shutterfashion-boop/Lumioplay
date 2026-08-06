@@ -1,4 +1,5 @@
-import { getScopedStorageItem, setScopedStorageItem } from '@/lib/plugin-sdk'
+import { getActiveLang, getScopedStorageItem, setScopedStorageItem } from '@/lib/plugin-sdk'
+import type { LumioplayStringKey, LumioplayTranslate } from './lumioplay-i18n'
 import { buildMetadataFromFileName } from './lumioplay-metadata'
 import type {
   LumioplayConsoleId,
@@ -7,6 +8,7 @@ import type {
   LumioplayLibraryDatabase,
   LumioplayLibrarySettings,
   LumioplayPlatformDefinition,
+  LumioplayPlatformId,
 } from './lumioplay-types'
 
 const KEY_LIBRARY = 'lumioplay_library_v2'
@@ -27,8 +29,10 @@ const DEFAULT_SETTINGS: LumioplayLibrarySettings = {
   heroMode: 'last_played',
 }
 
+// `label` holds the console identifiers, which are the same in every language.
+// The one exception is the `all` filter — see getPlatformLabel below.
 export const LUMIOPLAY_PLATFORMS: LumioplayPlatformDefinition[] = [
-  { id: 'all', label: 'Alla', extensions: [] },
+  { id: 'all', label: 'All', extensions: [] },
   { id: 'nes', label: 'NES', extensions: ['.nes'], coreId: 'fceumm_libretro' },
   { id: 'snes', label: 'SNES', extensions: ['.sfc', '.smc'], coreId: 'snes9x_libretro' },
   { id: 'gb', label: 'GB', extensions: ['.gb'], coreId: 'gambatte_libretro' },
@@ -47,20 +51,37 @@ export const IMPORTABLE_ROM_EXTENSIONS = Array.from(
   ),
 )
 
-export const LUMIOPLAY_JOYPAD_BINDINGS: Array<{ index: number; label: string }> = [
+// Face/shoulder buttons keep their printed names; only the d-pad directions
+// are words, so those carry a translation key.
+export interface LumioplayJoypadBinding {
+  index: number
+  label: string
+  labelKey?: LumioplayStringKey
+}
+
+export const LUMIOPLAY_JOYPAD_BINDINGS: LumioplayJoypadBinding[] = [
   { index: 0, label: 'B' },
   { index: 1, label: 'Y' },
   { index: 2, label: 'Select' },
   { index: 3, label: 'Start' },
-  { index: 4, label: 'Up' },
-  { index: 5, label: 'Down' },
-  { index: 6, label: 'Left' },
-  { index: 7, label: 'Right' },
+  { index: 4, label: 'Up', labelKey: 'dpadUp' },
+  { index: 5, label: 'Down', labelKey: 'dpadDown' },
+  { index: 6, label: 'Left', labelKey: 'dpadLeft' },
+  { index: 7, label: 'Right', labelKey: 'dpadRight' },
   { index: 8, label: 'A' },
   { index: 9, label: 'X' },
   { index: 10, label: 'L' },
   { index: 11, label: 'R' },
 ]
+
+export function getJoypadBindingLabel(binding: LumioplayJoypadBinding, t: LumioplayTranslate): string {
+  return binding.labelKey ? t(binding.labelKey) : binding.label
+}
+
+export function getPlatformLabel(platformId: LumioplayPlatformId, t: LumioplayTranslate): string {
+  if (platformId === 'all') return t('platformAll')
+  return LUMIOPLAY_PLATFORMS.find((platform) => platform.id === platformId)?.label ?? platformId.toUpperCase()
+}
 
 const DEFAULT_GAMEPAD_MAPPING: Record<number, string> = {
   0: '1',   // B
@@ -242,12 +263,13 @@ function mergeImportedGameWithExisting(nextGame: LumioplayGame, existing?: Lumio
 }
 
 function normalizeGames(games: LumioplayGame[]): LumioplayGame[] {
+  const lang = getActiveLang()
   return games
     .slice()
     .sort((left, right) => {
       const leftTitle = left.metadata?.sortTitle ?? left.title
       const rightTitle = right.metadata?.sortTitle ?? right.title
-      return leftTitle.localeCompare(rightTitle, 'sv')
+      return leftTitle.localeCompare(rightTitle, lang)
     })
 }
 

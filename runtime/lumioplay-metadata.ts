@@ -1,5 +1,9 @@
+import type { LumioplayStringKey, LumioplayTranslate } from './lumioplay-i18n'
 import type { LumioplayConsoleId, LumioplayGame, LumioplayGameMetadata } from './lumioplay-types'
 
+// Regions are persisted on the game metadata, so the stored value stays
+// canonical (English) and only the display label is translated — poster
+// matching in the browser reads these tokens back.
 const REGION_BY_TOKEN: Record<string, string> = {
   usa: 'USA',
   europe: 'Europe',
@@ -314,4 +318,18 @@ export async function resolveFirstReachableCoverUrl(
 
 export function getGameDisplayTitle(game: LumioplayGame): string {
   return game.metadata?.displayTitle?.trim() || game.title
+}
+
+// USA/PAL/NTSC are acronyms and stay as they are in both languages.
+const REGION_KEY_BY_LABEL: Record<string, LumioplayStringKey> = {
+  Europe: 'regionEurope',
+  Japan: 'regionJapan',
+  World: 'regionWorld',
+  Asia: 'regionAsia',
+}
+
+export function getRegionLabel(region: string | null | undefined, t: LumioplayTranslate): string | null {
+  if (!region) return null
+  const key = REGION_KEY_BY_LABEL[region]
+  return key ? t(key) : region
 }

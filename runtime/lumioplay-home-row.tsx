@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { getPluginHomeRowTrackClass, type HomeRowProps } from '@/lib/plugin-sdk'
+import { getPluginHomeRowTrackClass, useLang, type HomeRowProps } from '@/lib/plugin-sdk'
 import {
   canLaunchGame,
   canLaunchLibretro,
@@ -7,18 +7,15 @@ import {
   launchLibretroGameEmbedded,
 } from './lumioplay-launcher'
 import { startHomeInputSession } from './lumioplay-home-input'
+import type { LumioplayLang } from './lumioplay-i18n'
 import { getGameDisplayTitle } from './lumioplay-metadata'
-import { getEffectivePlatform, getStoredGames, LUMIOPLAY_PLATFORMS, markGameLaunched } from './lumioplay-storage'
-import type { LumioplayGame, LumioplayConsoleId } from './lumioplay-types'
+import { getEffectivePlatform, getPlatformLabel, getStoredGames, markGameLaunched } from './lumioplay-storage'
+import type { LumioplayGame } from './lumioplay-types'
 
 const actionButtonClass =
   'flex h-9 items-center gap-1.5 rounded-full border border-white/[0.1] bg-white/[0.03] px-4 text-[0.6rem] font-normal uppercase tracking-[0.2em] text-slate-200 transition-all hover:border-white/[0.16] hover:bg-white/[0.05] hover:text-white'
 
-function getPlatformLabel(platformId: LumioplayConsoleId): string {
-  return LUMIOPLAY_PLATFORMS.find((platform) => platform.id === platformId)?.label ?? platformId.toUpperCase()
-}
-
-function sortFavoriteGames(games: LumioplayGame[]): LumioplayGame[] {
+function sortFavoriteGames(games: LumioplayGame[], lang: LumioplayLang): LumioplayGame[] {
   return games
     .filter((game) => game.favorite && !game.missing)
     .slice()
@@ -26,7 +23,7 @@ function sortFavoriteGames(games: LumioplayGame[]): LumioplayGame[] {
       const leftPlayed = left.lastPlayedAt ?? ''
       const rightPlayed = right.lastPlayedAt ?? ''
       if (leftPlayed !== rightPlayed) return rightPlayed.localeCompare(leftPlayed)
-      return getGameDisplayTitle(left).localeCompare(getGameDisplayTitle(right), 'sv')
+      return getGameDisplayTitle(left).localeCompare(getGameDisplayTitle(right), lang)
     })
 }
 
@@ -36,12 +33,13 @@ export function LumioplayFavoritesHomeRow({
   count = 16,
   sliderCardWidth = 'calc((100% - 3 * 0.75rem) / 4)',
 }: HomeRowProps) {
-  const [games, setGames] = useState<LumioplayGame[]>(() => sortFavoriteGames(getStoredGames()))
+  const { lang, t } = useLang()
+  const [games, setGames] = useState<LumioplayGame[]>(() => sortFavoriteGames(getStoredGames(), lang))
   const [launchingGameId, setLaunchingGameId] = useState<string | null>(null)
   const [launchError, setLaunchError] = useState<string | null>(null)
 
   useEffect(() => {
-    const sync = () => setGames(sortFavoriteGames(getStoredGames()))
+    const sync = () => setGames(sortFavoriteGames(getStoredGames(), lang))
     sync()
     const intervalId = window.setInterval(sync, 2500)
     const handleFocus = () => sync()
@@ -55,7 +53,7 @@ export function LumioplayFavoritesHomeRow({
       window.removeEventListener('focus', handleFocus)
       document.removeEventListener('visibilitychange', handleVisibility)
     }
-  }, [])
+  }, [lang])
 
   const visibleGames = useMemo(() => games.slice(0, Math.max(1, count)), [games, count])
 
@@ -74,9 +72,9 @@ export function LumioplayFavoritesHomeRow({
       } else {
         await launchGameWithRetroArch(game)
       }
-      setGames(sortFavoriteGames(markGameLaunched(game.id)))
+      setGames(sortFavoriteGames(markGameLaunched(game.id), lang))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Kunde inte starta spelet.'
+      const message = error instanceof Error ? error.message : t('launchFailed')
       setLaunchError(message)
       onNavigate({ pageId: 'lumioplay-library' })
     } finally {
@@ -90,15 +88,15 @@ export function LumioplayFavoritesHomeRow({
     <section>
       <div className="mb-3 flex items-end justify-between">
         <div>
-          <h2 className="text-xl font-semibold text-white">Lumioplay favoriter</h2>
-          <p className="mt-0.5 text-sm text-slate-400">Favoritmarkerade spel</p>
+          <h2 className="text-xl font-semibold text-white">{t('homeRowFavoritesTitle')}</h2>
+          <p className="mt-0.5 text-sm text-slate-400">{t('homeRowFavoritesSubtitle')}</p>
         </div>
         <button
           type="button"
           onClick={() => onNavigate({ pageId: 'lumioplay-library' })}
           className={actionButtonClass}
         >
-          Visa alla
+          {t('showAll')}
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
             <polyline points="9 18 15 12 9 6" />
           </svg>
@@ -107,7 +105,7 @@ export function LumioplayFavoritesHomeRow({
       <div className={getPluginHomeRowTrackClass(layout)}>
         {visibleGames.map((game) => {
           const coverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null
-          const platformLabel = getPlatformLabel(getEffectivePlatform(game))
+          const platformLabel = getPlatformLabel(getEffectivePlatform(game), t)
           return (
             <button
               key={game.id}
@@ -150,7 +148,7 @@ export function LumioplayFavoritesHomeRow({
               </div>
               <div className="p-2.5">
                 <p className="text-[9px] uppercase tracking-[0.22em] text-slate-300/60">
-                  {game.lastPlayedAt ? 'Senast spelat' : 'Favorit'}
+                  {game.lastPlayedAt ? t('lastPlayed') : t('favorite')}
                 </p>
                 <h3 className="mt-0.5 line-clamp-2 text-[0.8rem] font-semibold leading-snug text-white">
                   {getGameDisplayTitle(game)}

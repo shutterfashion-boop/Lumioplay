@@ -8,8 +8,15 @@ import {
   pickPluginFolder,
   scanPluginDirectory,
   setScopedStorageItem,
+  useLang,
 } from '@/lib/plugin-sdk'
-import { buildCoverCandidates, getGameDisplayTitle, resolveFirstReachableCoverUrl } from './lumioplay-metadata'
+import type { LumioplayLang } from './lumioplay-i18n'
+import {
+  buildCoverCandidates,
+  getGameDisplayTitle,
+  getRegionLabel,
+  resolveFirstReachableCoverUrl,
+} from './lumioplay-metadata'
 import {
   createImportedGame,
   getAutoSyncEnabled,
@@ -18,6 +25,7 @@ import {
   getEffectivePlatform,
   getGamepadExitCombo,
   getGamepadMapping,
+  getPlatformLabel,
   getRomFolders,
   getStoredGames,
   IMPORTABLE_ROM_EXTENSIONS,
@@ -86,6 +94,9 @@ const POSTER_SYNC_MISS_CACHE_KEY = 'lumioplay_poster_miss_cache_v3'
 const POSTER_SYNC_MISS_TTL_MS = 45 * 60 * 1000
 const POSTER_SYNC_MAX_MISS_ENTRIES = 2500
 const POSTER_INDEX_CACHE_TTL_MS = 24 * 60 * 60 * 1000
+// Grouping id for browser folder uploads that expose no directory name. Never
+// displayed, so it stays language independent.
+const WEB_FOLDER_SOURCE_ID = 'selected-folder'
 
 function formatFileSize(bytes?: number | null): string | null {
   if (!bytes || bytes <= 0) return null
@@ -97,10 +108,6 @@ function formatFileSize(bytes?: number | null): string | null {
     unitIndex += 1
   }
   return `${value.toFixed(value >= 10 || unitIndex === 0 ? 0 : 1)} ${units[unitIndex]}`
-}
-
-function getPlatformLabel(platform: LumioplayPlatformId): string {
-  return LUMIOPLAY_PLATFORMS.find((entry) => entry.id === platform)?.label ?? platform.toUpperCase()
 }
 
 function getPlatformOptions(): LumioplayConsoleId[] {
@@ -254,7 +261,12 @@ function getPreferredRegionTokens(region?: string | null): string[] {
   return []
 }
 
-function sortGames(games: LumioplayGame[], platform: LumioplayPlatformId, query: string): LumioplayGame[] {
+function sortGames(
+  games: LumioplayGame[],
+  platform: LumioplayPlatformId,
+  query: string,
+  lang: LumioplayLang,
+): LumioplayGame[] {
   const normalizedQuery = query.trim().toLowerCase()
   return games
     .filter((game) => {
@@ -269,7 +281,7 @@ function sortGames(games: LumioplayGame[], platform: LumioplayPlatformId, query:
       const leftPlayed = left.lastPlayedAt ?? ''
       const rightPlayed = right.lastPlayedAt ?? ''
       if (leftPlayed !== rightPlayed) return rightPlayed.localeCompare(leftPlayed)
-      return getGameDisplayTitle(left).localeCompare(getGameDisplayTitle(right), 'sv')
+      return getGameDisplayTitle(left).localeCompare(getGameDisplayTitle(right), lang)
     })
 }
 
@@ -374,6 +386,7 @@ function LibraryToolbar({
   syncing: boolean
   syncingPosters: boolean
 }) {
+  const { t } = useLang()
   return (
     <div className="flex flex-wrap gap-3">
       <button
@@ -381,14 +394,14 @@ function LibraryToolbar({
         onClick={onUploadRoms}
         className={`${cardButtonClass} ${activePillClass}`}
       >
-        {desktopReady ? 'Importera ROMs' : 'Ladda upp ROMs'}
+        {desktopReady ? t('browserImportRoms') : t('browserUploadRoms')}
       </button>
       <button
         type="button"
         onClick={onChooseFolder}
         className={`${cardButtonClass} ${neutralPillClass}`}
       >
-        Välj mapp
+        {t('browserChooseFolder')}
       </button>
       {desktopReady && hasSavedFolders ? (
         <button
@@ -396,7 +409,7 @@ function LibraryToolbar({
           onClick={onRescanFolders}
           className={`${cardButtonClass} ${syncing ? activePillClass : neutralPillClass}`}
         >
-          {syncing ? 'Synkar...' : 'Synka nu'}
+          {syncing ? t('browserSyncing') : t('browserSyncNow')}
         </button>
       ) : null}
       <button
@@ -404,7 +417,7 @@ function LibraryToolbar({
         onClick={onSyncPosters}
         className={`${cardButtonClass} ${syncingPosters ? activePillClass : neutralPillClass}`}
       >
-        {syncingPosters ? 'Avbryt postersync' : 'Synka posters'}
+        {syncingPosters ? t('browserCancelPosterSync') : t('browserSyncPosters')}
       </button>
     </div>
   )
@@ -417,6 +430,7 @@ function StarButton({
   active: boolean
   onClick: () => void
 }) {
+  const { t } = useLang()
   return (
     <button
       type="button"
@@ -426,7 +440,7 @@ function StarButton({
           ? 'border-accent-400/50 bg-accent-400/10 text-accent-300'
           : 'border-white/10 bg-black/25 text-slate-400 hover:border-white/20 hover:text-white'
       }`}
-      aria-label={active ? 'Ta bort favorit' : 'Markera som favorit'}
+      aria-label={active ? t('browserRemoveFavorite') : t('browserAddFavorite')}
     >
       ★
     </button>
@@ -454,6 +468,7 @@ function GamesGrid({
   onPlatformOverrideChange: (gameId: string, platform: LumioplayConsoleId | null) => void
   onCoreOverrideChange: (gameId: string, coreId: string | null) => void
 }) {
+  const { t } = useLang()
   const platformOptions = getPlatformOptions()
   const coreSuggestions = getCoreSuggestions()
   const gridProfile = getGridProfileForPlatform(activePlatform)
@@ -461,7 +476,7 @@ function GamesGrid({
   if (games.length === 0) {
     return (
       <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-sm text-slate-400">
-        Inga spel hittades ännu. Lägg till ROM-filer eller välj en ROM-mapp i inställningarna.
+        {t('browserEmptyLibrary')}
       </div>
     )
   }
@@ -474,6 +489,7 @@ function GamesGrid({
         const editing = editingGameId === game.id
         const displayCoverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null
         const posterAspectRatio = getGridProfileForPlatform(effectivePlatform).aspectRatio
+        const regionLabel = getRegionLabel(game.metadata?.region, t)
 
         return (
           <div
@@ -494,26 +510,26 @@ function GamesGrid({
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
               <div className="absolute left-2 right-2 top-2 flex items-start justify-between gap-2">
                 <span className="rounded-full border border-white/[0.08] bg-black/50 px-2 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300 backdrop-blur-sm">
-                  {getPlatformLabel(effectivePlatform)}
+                  {getPlatformLabel(effectivePlatform, t)}
                 </span>
                 <StarButton active={Boolean(game.favorite)} onClick={() => onToggleFavorite(game.id)} />
               </div>
               {game.missing ? (
                 <div className="absolute bottom-2 left-2">
-                  <span className="rounded-full bg-rose-500/80 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">Saknas</span>
+                  <span className="rounded-full bg-rose-500/80 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">{t('browserMissing')}</span>
                 </div>
               ) : null}
             </div>
             <div className="p-2.5">
               <p className="text-[9px] uppercase tracking-[0.22em] text-slate-300/60">
-                {effectiveCore ?? 'Ingen core'}
+                {effectiveCore ?? t('browserNoCore')}
                 {formatFileSize(game.fileSizeBytes) ? ` · ${formatFileSize(game.fileSizeBytes)}` : ''}
               </p>
               <h3 className="mt-0.5 line-clamp-2 text-[0.8rem] font-semibold leading-snug text-white">
                 {getGameDisplayTitle(game)}
               </h3>
-              {game.metadata?.region ? (
-                <p className="mt-0.5 text-[9px] uppercase tracking-[0.16em] text-slate-400">{game.metadata.region}</p>
+              {regionLabel ? (
+                <p className="mt-0.5 text-[9px] uppercase tracking-[0.16em] text-slate-400">{regionLabel}</p>
               ) : null}
               <div className="mt-2 flex flex-wrap items-center gap-2">
                 <button
@@ -526,27 +542,25 @@ function GamesGrid({
                       : `cursor-not-allowed ${neutralPillClass} opacity-50`
                   }`}
                 >
-                  {launchState.gameId === game.id ? 'Startar...' : 'Spela'}
+                  {launchState.gameId === game.id ? t('starting') : t('browserPlay')}
                 </button>
                 <button
                   type="button"
                   onClick={() => onEditGame(editing ? null : game.id)}
                   className={`${cardButtonClass} ${neutralPillClass}`}
                 >
-                  {editing ? 'Klar' : 'Anpassa'}
+                  {editing ? t('browserDone') : t('browserCustomize')}
                 </button>
               </div>
               {!canLaunchGame(game) && !game.missing ? (
                 <p className="mt-1 text-[11px] text-slate-500">
-                  {isPluginDesktopHost()
-                    ? 'Importera via desktop picker eller välj en lokal mapp.'
-                    : 'Desktop krävs för att starta spel.'}
+                  {isPluginDesktopHost() ? t('browserImportHint') : t('browserDesktopRequired')}
                 </p>
               ) : null}
               {editing ? (
                 <div className="mt-3 space-y-3 rounded-2xl border border-white/[0.08] bg-white/[0.03] p-3">
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Konsol</label>
+                    <label className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{t('browserConsole')}</label>
                     <select
                       value={game.platformOverride ?? ''}
                       onChange={(event) =>
@@ -557,21 +571,23 @@ function GamesGrid({
                       }
                       className="h-10 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-3 text-sm text-white outline-none"
                     >
-                      <option value="">Autodetektering ({getPlatformLabel(game.platform)})</option>
+                      <option value="">
+                        {t('browserAutoDetect').replace('{platform}', getPlatformLabel(game.platform, t))}
+                      </option>
                       {platformOptions.map((platform) => (
                         <option key={platform} value={platform}>
-                          {getPlatformLabel(platform)}
+                          {getPlatformLabel(platform, t)}
                         </option>
                       ))}
                     </select>
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] uppercase tracking-[0.18em] text-slate-500">Libretro-core</label>
+                    <label className="text-[10px] uppercase tracking-[0.18em] text-slate-500">{t('browserLibretroCore')}</label>
                     <input
                       list={`core-suggestions-${game.id}`}
                       value={game.coreOverride ?? ''}
                       onChange={(event) => onCoreOverrideChange(game.id, event.target.value || null)}
-                      placeholder={effectiveCore ?? 'Ange core-id'}
+                      placeholder={effectiveCore ?? t('browserCoreIdPlaceholder')}
                       className="h-10 w-full rounded-2xl border border-white/10 bg-slate-950/80 px-3 text-sm text-white placeholder:text-slate-500 outline-none"
                     />
                     <datalist id={`core-suggestions-${game.id}`}>
@@ -591,6 +607,7 @@ function GamesGrid({
 }
 
 export function LumioplayBrowsePage(_props: BrowsePageProps) {
+  const { lang, t } = useLang()
   const [games, setGames] = useState<LumioplayGame[]>(() => getStoredGames())
   const [platform, setPlatform] = useState<LumioplayPlatformId>('all')
   const [query, setQuery] = useState('')
@@ -768,7 +785,10 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
       ? platform
       : (availablePlatformIds[0] ?? 'all')
 
-  const filteredGames = useMemo(() => sortGames(games, resolvedPlatform, query), [games, resolvedPlatform, query])
+  const filteredGames = useMemo(
+    () => sortGames(games, resolvedPlatform, query, lang),
+    [games, resolvedPlatform, query, lang],
+  )
 
   function refreshGames() {
     setGames(getStoredGames())
@@ -1100,7 +1120,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
       })
       const limited = candidates.slice(0, Math.max(0, options?.limit ?? candidates.length))
       if (limited.length === 0) {
-        if (!options?.silent) setStatusMessage('Inga spel saknar poster just nu.')
+        if (!options?.silent) setStatusMessage(t('browserNoMissingPosters'))
         return
       }
       if (options?.forceRefresh) {
@@ -1152,18 +1172,22 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
 
       if (!options?.silent) {
         const unmatchedCount = Math.max(0, processedCount - resolvedCount)
-        if (cancelled) {
-          setStatusMessage(`Postersync avbröts (${resolvedCount}/${processedCount}). ${unmatchedCount} spel saknar matchande poster.`)
-        } else if (options?.forceRefresh) {
-          setStatusMessage(`Force-resync klar: ${resolvedCount}/${processedCount} posters uppdaterades. ${unmatchedCount} spel saknar matchande poster.`)
-        } else {
-          setStatusMessage(`${resolvedCount}/${processedCount} posters uppdaterades. ${unmatchedCount} spel saknar matchande poster.`)
-        }
+        const key = cancelled
+          ? 'browserPosterSyncCancelled'
+          : options?.forceRefresh
+            ? 'browserPosterSyncForced'
+            : 'browserPosterSyncDone'
+        setStatusMessage(
+          t(key)
+            .replace('{resolved}', String(resolvedCount))
+            .replace('{processed}', String(processedCount))
+            .replace('{unmatched}', String(unmatchedCount)),
+        )
       }
     } catch (error) {
       if (!options?.silent) {
-        const message = error instanceof Error ? error.message : 'Postersync misslyckades.'
-        setStatusMessage(message || 'Postersync misslyckades.')
+        const message = error instanceof Error ? error.message : t('browserPosterSyncFailed')
+        setStatusMessage(message || t('browserPosterSyncFailed'))
       }
     } finally {
       savePosterMissCache()
@@ -1176,12 +1200,16 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
 
   function persistImportedGames(nextGames: LumioplayGame[], sourceLabel: string) {
     if (nextGames.length === 0) {
-      setStatusMessage(`Inga stödda ROM-filer hittades i ${sourceLabel}.`)
+      setStatusMessage(t('browserNoSupportedRoms').replace('{source}', sourceLabel))
       return
     }
     const merged = upsertImportedGames(nextGames)
     setGames(merged)
-    setStatusMessage(`${nextGames.length} spel importerades från ${sourceLabel}.`)
+    setStatusMessage(
+      t('browserImportedGames')
+        .replace('{count}', String(nextGames.length))
+        .replace('{source}', sourceLabel),
+    )
     void syncPostersForGames(nextGames, { limit: POSTER_SYNC_AUTO_LIMIT, silent: true, onlyMissing: true })
   }
 
@@ -1191,7 +1219,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
       IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')),
     )
     if (!indexedFiles?.length) {
-      setStatusMessage(`Inga stödda ROM-filer hittades i ${directory}.`)
+      setStatusMessage(t('browserNoSupportedRoms').replace('{source}', directory))
       return
     }
 
@@ -1209,7 +1237,11 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
 
     const merged = syncFolderGames(directory, importedGames)
     setGames(merged)
-    setStatusMessage(`${importedGames.length} spel synkades från ${directory}.`)
+    setStatusMessage(
+      t('browserSyncedGames')
+        .replace('{count}', String(importedGames.length))
+        .replace('{source}', directory),
+    )
     void syncPostersForGames(importedGames, { limit: POSTER_SYNC_AUTO_LIMIT, silent: true, onlyMissing: true })
   }
 
@@ -1250,8 +1282,8 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
       if (!silent) {
         setStatusMessage(
           totalFound > 0
-            ? `${totalFound} spel synkades från sparade ROM-mappar.`
-            : 'Inga stödda ROM-filer hittades i sparade ROM-mappar.',
+            ? t('browserSyncedFromSavedFolders').replace('{count}', String(totalFound))
+            : t('browserNoRomsInSavedFolders'),
         )
       }
     } finally {
@@ -1262,7 +1294,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
 
   async function handleNativeImport() {
     const paths = await pickPluginFiles([
-      { name: 'ROM files', extensions: IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')) },
+      { name: t('browserRomFilesFilter'), extensions: IMPORTABLE_ROM_EXTENSIONS.map((extension) => extension.replace('.', '')) },
     ])
     if (!paths?.length) return
     const importedGames = paths
@@ -1275,7 +1307,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
         })
       })
       .filter((game): game is LumioplayGame => Boolean(game))
-    persistImportedGames(importedGames, 'desktopimport')
+    persistImportedGames(importedGames, t('browserSourceDesktopImport'))
   }
 
   async function handleNativeFolderPick() {
@@ -1287,7 +1319,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
       setRomFolders(Array.from(existingFolders))
       await importIndexedDirectory(folder)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Kunde inte lägga till ROM-mapp.'
+      const message = error instanceof Error ? error.message : t('browserAddFolderFailed')
       setStatusMessage(message)
     }
   }
@@ -1301,13 +1333,16 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
           romPath: source === 'folder' ? file.webkitRelativePath || file.name : file.name,
           source,
           sourceFolder: source === 'folder'
-            ? (file.webkitRelativePath.includes('/') ? file.webkitRelativePath.split('/')[0] : 'vald mapp')
+            ? (file.webkitRelativePath.includes('/') ? file.webkitRelativePath.split('/')[0] : WEB_FOLDER_SOURCE_ID)
             : null,
           fileSizeBytes: file.size,
         }),
       )
       .filter((game): game is LumioplayGame => Boolean(game))
-    persistImportedGames(importedGames, source === 'folder' ? 'vald mapp' : 'uppladdning')
+    persistImportedGames(
+      importedGames,
+      source === 'folder' ? t('browserSourceSelectedFolder') : t('browserSourceUpload'),
+    )
   }
 
   async function handleLaunch(game: LumioplayGame) {
@@ -1321,15 +1356,15 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
         keyboardStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
         gamepadStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
         lastSentStateRef.current = Array(JOYPAD_BUTTON_COUNT).fill(false)
-        setStatusMessage(`Startade ${getGameDisplayTitle(game)} i Lumio.`)
+        setStatusMessage(t('browserStartedInLumio').replace('{title}', getGameDisplayTitle(game)))
       } else if (canLaunchGame(game)) {
         await launchGameWithRetroArch(game)
         const updated = markGameLaunched(game.id)
         setGames(updated)
-        setStatusMessage(`Startade ${getGameDisplayTitle(game)} i RetroArch.`)
+        setStatusMessage(t('browserStartedInRetroArch').replace('{title}', getGameDisplayTitle(game)))
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Spelet kunde inte startas.'
+      const message = error instanceof Error ? error.message : t('browserLaunchFailed')
       setLaunchState({ gameId: null, message })
       setStatusMessage(message)
       return
@@ -1371,7 +1406,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
       <div className="space-y-4">
         <div>
           <p className="text-[11px] uppercase tracking-[0.22em] text-slate-500">Lumioplay</p>
-          <h1 className="text-3xl font-semibold text-white">Spelbibliotek</h1>
+          <h1 className="text-3xl font-semibold text-white">{t('browserTitle')}</h1>
         </div>
         <LibraryToolbar
           onUploadRoms={() => {
@@ -1394,7 +1429,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
           onSyncPosters={() => {
             if (syncingPosters) {
               posterSyncCancelRequestedRef.current = true
-              setStatusMessage('Avbryter postersync...')
+              setStatusMessage(t('browserCancellingPosterSync'))
               return
             }
             void syncPostersForGames(getStoredGames(), { onlyMissing: true, forceRefresh: true })
@@ -1408,7 +1443,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Sök spel"
+            placeholder={t('browserSearchPlaceholder')}
             className="h-9 w-full max-w-xs rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-[0.8rem] text-white placeholder:text-slate-500 outline-none transition-all focus:border-accent-400/30 focus:bg-white/[0.07]"
           />
           <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
@@ -1416,9 +1451,9 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
         {statusMessage ? <p className="text-sm text-slate-400">{statusMessage}</p> : null}
         {posterSyncProgress ? (
           <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
-            Postersync {posterSyncProgress.processed}/{posterSyncProgress.total}
+            {t('browserPosterSyncProgress')} {posterSyncProgress.processed}/{posterSyncProgress.total}
             {' · '}
-            träffar {posterSyncProgress.resolved}
+            {t('browserPosterSyncHits')} {posterSyncProgress.resolved}
           </p>
         ) : null}
         {launchState.message ? <p className="text-sm text-rose-300">{launchState.message}</p> : null}
@@ -1478,15 +1513,15 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
                   stopActiveGame()
                 }}
               >
-                Avsluta spel
+                {t('browserExitGame')}
               </button>
               <span className="text-[0.58rem] uppercase tracking-[0.2em] text-white/70 whitespace-nowrap">
-                Esc eller Select + Start
+                {t('browserExitHint')}
               </span>
             </div>
           </div>
           <div className="pointer-events-none absolute bottom-4 left-1/2 -translate-x-1/2 text-[0.6rem] uppercase tracking-widest text-white/30">
-            Esc eller Select + Start · Avsluta
+            {t('browserExitHint')} · {t('browserExit')}
           </div>
         </div>
       )}

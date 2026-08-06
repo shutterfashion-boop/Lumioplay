@@ -1,4 +1,10 @@
 import type React from 'react'
+import { useEffect, useState } from 'react'
+import {
+  translate,
+  type LumioplayLang,
+  type LumioplayStringKey,
+} from '../../runtime/lumioplay-i18n'
 
 export type PluginText = string | Partial<Record<'en' | 'sv', string>>
 
@@ -195,6 +201,73 @@ export function setScopedStorageItem(key: string, value: string): void {
   }
   if (typeof window === 'undefined') return
   window.localStorage.setItem(`lumioplay:${key}`, value)
+}
+
+// The host persists the picked language per profile under `app_lang` and fires
+// `lumio-app-lang-changed` so detached copies of its i18n module can follow the
+// picker live. The plugin bundle is one of those detached copies (it resolves
+// `@/lib/plugin-sdk` to this shim, not to the host), so we mirror the same
+// read + subscribe behaviour instead of reaching for the host's LangProvider.
+const LANG_STORAGE_KEY = 'app_lang'
+const LANG_CHANGED_EVENT = 'lumio-app-lang-changed'
+const PROFILE_CHANGED_EVENT = 'lumio-profile-changed'
+const DEFAULT_LANG: LumioplayLang = 'en'
+
+// Falls back to the legacy unscoped `app_lang` so installs from before
+// per-profile scoping keep their setting, then to the English default.
+export function getActiveLang(): LumioplayLang {
+  if (typeof window === 'undefined') return DEFAULT_LANG
+  try {
+    const scoped = getScopedStorageItem(LANG_STORAGE_KEY)
+    const legacy = window.localStorage.getItem(LANG_STORAGE_KEY)
+    const value = scoped ?? legacy
+    if (value === 'sv' || value === 'en') return value
+  } catch {
+    // storage unavailable — fall through to the default
+  }
+  return DEFAULT_LANG
+}
+
+// Translation for module-scope callers (launcher/storage helpers) that cannot
+// use the hook. Resolves the active language at call time.
+export function tr(key: LumioplayStringKey): string {
+  return translate(getActiveLang(), key)
+}
+
+export function useLang(): {
+  lang: LumioplayLang
+  setLang: (next: LumioplayLang) => void
+  t: (key: LumioplayStringKey) => string
+} {
+  const [lang, setLangState] = useState<LumioplayLang>(DEFAULT_LANG)
+
+  // Hydrate after mount, then re-read on picker changes and on profile
+  // switches (language is per-profile). `storage` covers other windows.
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const sync = () => setLangState(getActiveLang())
+    sync()
+    window.addEventListener(LANG_CHANGED_EVENT, sync)
+    window.addEventListener(PROFILE_CHANGED_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(LANG_CHANGED_EVENT, sync)
+      window.removeEventListener(PROFILE_CHANGED_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+
+  return {
+    lang,
+    setLang: (next: LumioplayLang) => {
+      setScopedStorageItem(LANG_STORAGE_KEY, next)
+      setLangState(next)
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(LANG_CHANGED_EVENT))
+      }
+    },
+    t: (key: LumioplayStringKey) => translate(lang, key),
+  }
 }
 
 export function isPluginDesktopHost(): boolean {

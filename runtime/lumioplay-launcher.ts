@@ -7,7 +7,9 @@ import {
   sendLibretroInput,
   setLibretroBounds,
   stopLibretroGame,
+  tr,
 } from '@/lib/plugin-sdk'
+import type { LumioplayStringKey } from './lumioplay-i18n'
 import {
   getEffectiveCoreId,
   getEffectivePlatform,
@@ -75,10 +77,15 @@ export interface RetroArchLaunchConfig {
   corePath: string
 }
 
+export type RetroArchValidationStatus = 'ok' | 'ok_cores_only' | 'not_verified' | 'invalid'
+
 export interface RetroArchValidationResult {
+  // Derived from `status`, never from the (translated) `details` text.
   ok: boolean
+  status: RetroArchValidationStatus
   executablePath: string
   coresPath: string
+  detailKeys: LumioplayStringKey[]
   details: string[]
 }
 
@@ -94,20 +101,20 @@ export function getSuggestedRetroArchSetup(): RetroArchSuggestedSetup {
     return {
       retroArchPath: 'C:\\Program Files\\RetroArch\\retroarch.exe',
       retroArchCoresPath: 'C:\\Program Files\\RetroArch\\cores',
-      label: 'RetroArch standardinstallering för Windows',
+      label: tr('launcherSetupWindows'),
     }
   }
   if (os === 'linux') {
     return {
       retroArchPath: '/usr/bin/retroarch',
       retroArchCoresPath: '/usr/lib/libretro',
-      label: 'Vanlig RetroArch-installering för Linux',
+      label: tr('launcherSetupLinux'),
     }
   }
   return {
     retroArchPath: '/Applications/RetroArch.app',
     retroArchCoresPath: '/Applications/RetroArch.app/Contents/Resources/cores',
-    label: 'Vanlig libretro-installation för macOS',
+    label: tr('launcherSetupMacos'),
   }
 }
 
@@ -116,52 +123,58 @@ async function pathExists(path: string): Promise<boolean> {
   return checkPluginPathExists(path)
 }
 
+function buildValidationResult(
+  status: RetroArchValidationStatus,
+  executablePath: string,
+  coresPath: string,
+  detailKeys: LumioplayStringKey[],
+): RetroArchValidationResult {
+  return {
+    ok: status !== 'invalid',
+    status,
+    executablePath,
+    coresPath,
+    detailKeys,
+    details: detailKeys.map((key) => tr(key)),
+  }
+}
+
 export async function validateRetroArchSetup(
   inputRetroArchPath: string,
   inputRetroArchCoresPath: string,
 ): Promise<RetroArchValidationResult> {
   const executablePath = inferRetroArchExecutablePath(inputRetroArchPath)
   const coresPath = trimTrailingSlashes(inputRetroArchCoresPath) || inferRetroArchCoresPath(inputRetroArchPath)
-  const details: string[] = []
+  const problems: LumioplayStringKey[] = []
 
   if (!coresPath) {
-    details.push('Libretro core-mappen saknas.')
+    problems.push('launcherValidationCoresMissing')
   }
 
+  // Path checks need the desktop host; in the browser nothing deeper than the
+  // configured-or-not check above can be verified.
   if (!isPluginDesktopHost()) {
-    return {
-      ok: details.length === 0,
-      executablePath,
-      coresPath,
-      details: details.length > 0 ? details : ['Validering i detalj kräver desktop-appen.'],
+    if (problems.length > 0) {
+      return buildValidationResult('invalid', executablePath, coresPath, problems)
     }
+    return buildValidationResult('not_verified', executablePath, coresPath, ['launcherValidationDesktopRequired'])
   }
 
   if (executablePath && !(await pathExists(executablePath))) {
-    details.push('RetroArch-appen kunde inte hittas på den angivna sökvägen.')
+    problems.push('launcherValidationRetroArchNotFound')
   }
   if (coresPath && !(await pathExists(coresPath))) {
-    details.push('Libretro core-mappen kunde inte hittas på den angivna sökvägen.')
+    problems.push('launcherValidationCoresNotFound')
   }
 
-  if (details.length === 0) {
-    details.push(
-      executablePath
-        ? 'RetroArch-appen och core-mappen ser giltiga ut.'
-        : 'Core-mappen ser giltig ut. RetroArch-appen är valfri.',
-    )
+  if (problems.length > 0) {
+    return buildValidationResult('invalid', executablePath, coresPath, problems)
   }
 
-  return {
-    ok: details.length === 1
-      && (
-        details[0] === 'RetroArch-appen och core-mappen ser giltiga ut.'
-        || details[0] === 'Core-mappen ser giltig ut. RetroArch-appen är valfri.'
-      ),
-    executablePath,
-    coresPath,
-    details,
-  }
+  const status: RetroArchValidationStatus = executablePath ? 'ok' : 'ok_cores_only'
+  return buildValidationResult(status, executablePath, coresPath, [
+    status === 'ok' ? 'launcherValidationOk' : 'launcherValidationOkCoresOnly',
+  ])
 }
 
 export function canLaunchGame(game: LumioplayGame): boolean {
@@ -193,38 +206,38 @@ async function verifyLaunchConfig(config: RetroArchLaunchConfig): Promise<void> 
 
   const executableExists = await pathExists(config.executablePath)
   if (!executableExists) {
-    throw new Error('RetroArch-binären kunde inte hittas. Kontrollera sökvägen i inställningarna.')
+    throw new Error(tr('launcherRetroArchBinaryMissing'))
   }
 
   const coreExists = await pathExists(config.corePath)
   if (!coreExists) {
-    throw new Error('Libretro-coren kunde inte hittas. Kontrollera core-mappen eller välj en annan core för spelet.')
+    throw new Error(tr('launcherCoreMissing'))
   }
 }
 
 export async function launchRetroArch(executablePath: string): Promise<void> {
   if (!isPluginDesktopHost()) {
-    throw new Error('RetroArch-launch är bara tillgänglig i desktop-appen.')
+    throw new Error(tr('launcherRetroArchDesktopOnly'))
   }
   const resolved = inferRetroArchExecutablePath(executablePath)
-  if (!resolved) throw new Error('Ställ in RetroArch-sökväg i inställningarna först.')
+  if (!resolved) throw new Error(tr('launcherRetroArchPathRequired'))
   await launchPluginProgram(resolved, [])
 }
 
 export async function launchGameWithRetroArch(game: LumioplayGame): Promise<void> {
   if (!isPluginDesktopHost()) {
-    throw new Error('RetroArch-launch är bara tillgänglig i desktop-appen.')
+    throw new Error(tr('launcherRetroArchDesktopOnly'))
   }
   if (game.missing) {
-    throw new Error('ROM-filen kunde inte hittas vid senaste synken. Synka mappen igen eller välj en ny mapp.')
+    throw new Error(tr('launcherRomMissingAfterSync'))
   }
   if (!isAbsolutePath(game.romPath)) {
-    throw new Error('Det här spelet har ingen lokal filväg ännu. Importera ROM:en via desktop file picker.')
+    throw new Error(tr('launcherRomNoLocalPath'))
   }
 
   const config = getRetroArchLaunchConfig(game)
   if (!config) {
-    throw new Error('Ställ in RetroArch-sökväg och core-mapp först.')
+    throw new Error(tr('launcherRetroArchSetupRequired'))
   }
 
   await verifyLaunchConfig(config)
@@ -243,28 +256,28 @@ export function canLaunchLibretro(game: LumioplayGame): boolean {
 
 export async function launchLibretroGameEmbedded(game: LumioplayGame): Promise<void> {
   if (!isPluginDesktopHost()) {
-    throw new Error('Libretro-launch är bara tillgänglig i desktop-appen.')
+    throw new Error(tr('launcherLibretroDesktopOnly'))
   }
   if (game.missing) {
-    throw new Error('ROM-filen kunde inte hittas. Synka mappen igen.')
+    throw new Error(tr('launcherRomMissing'))
   }
   if (!isAbsolutePath(game.romPath)) {
-    throw new Error('Spelet saknar lokal filväg. Importera ROM:en via desktop file picker.')
+    throw new Error(tr('launcherGameNoLocalPath'))
   }
 
   const coreId = getEffectiveCoreId(game)
   if (!coreId) {
-    throw new Error('Ingen core vald för spelet. Välj en core i spelets inställningar.')
+    throw new Error(tr('launcherNoCoreSelected'))
   }
 
   const configuredCoresPath = trimTrailingSlashes(getRetroArchCoresPath()) || inferRetroArchCoresPath(getRetroArchPath())
   if (!configuredCoresPath) {
-    throw new Error('Ställ in core-mapp i inställningarna först.')
+    throw new Error(tr('launcherCoresPathRequired'))
   }
 
   const corePath = buildCorePath(coreId, configuredCoresPath)
   if (!(await pathExists(corePath))) {
-    throw new Error(`Libretro-coren kunde inte hittas: ${corePath}`)
+    throw new Error(tr('launcherCoreNotFoundAtPath').replace('{path}', corePath))
   }
   await launchLibretroGame(corePath, game.romPath)
 }

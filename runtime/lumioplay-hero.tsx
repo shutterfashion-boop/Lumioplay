@@ -1,17 +1,14 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
-import type { PluginHeroProps } from '@/lib/plugin-sdk'
+import { useLang, type PluginHeroProps } from '@/lib/plugin-sdk'
 import { canLaunchGame, canLaunchLibretro, launchGameWithRetroArch, launchLibretroGameEmbedded } from './lumioplay-launcher'
 import { startHomeInputSession } from './lumioplay-home-input'
-import { getGameDisplayTitle } from './lumioplay-metadata'
-import { getEffectivePlatform, getHeroEnabled, getHeroMode, getStoredGames, LUMIOPLAY_PLATFORMS, markGameLaunched } from './lumioplay-storage'
-import type { LumioplayConsoleId, LumioplayGame } from './lumioplay-types'
+import type { LumioplayLang } from './lumioplay-i18n'
+import { getGameDisplayTitle, getRegionLabel } from './lumioplay-metadata'
+import { getEffectivePlatform, getHeroEnabled, getHeroMode, getPlatformLabel, getStoredGames, markGameLaunched } from './lumioplay-storage'
+import type { LumioplayGame } from './lumioplay-types'
 import defaultLumioplayHeroBackdrop from './assets/lumioplay-hero-default.jpg'
 
-function getPlatformLabel(platformId: LumioplayConsoleId): string {
-  return LUMIOPLAY_PLATFORMS.find((platform) => platform.id === platformId)?.label ?? platformId.toUpperCase()
-}
-
-function pickHeroGame(games: LumioplayGame[], mode: 'last_played' | 'random'): LumioplayGame | null {
+function pickHeroGame(games: LumioplayGame[], mode: 'last_played' | 'random', lang: LumioplayLang): LumioplayGame | null {
   const playable = games.filter((game) => !game.missing)
   if (playable.length === 0) return null
   if (mode === 'random') {
@@ -23,7 +20,7 @@ function pickHeroGame(games: LumioplayGame[], mode: 'last_played' | 'random'): L
       const leftPlayed = left.lastPlayedAt ?? ''
       const rightPlayed = right.lastPlayedAt ?? ''
       if (leftPlayed !== rightPlayed) return rightPlayed.localeCompare(leftPlayed)
-      return getGameDisplayTitle(left).localeCompare(getGameDisplayTitle(right), 'sv')
+      return getGameDisplayTitle(left).localeCompare(getGameDisplayTitle(right), lang)
     })
   return sorted[0] ?? null
 }
@@ -124,6 +121,7 @@ async function fetchWikipediaSummary(game: LumioplayGame): Promise<string | null
 }
 
 export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: PluginHeroProps) {
+  const { lang, t } = useLang()
   const [games, setGames] = useState<LumioplayGame[]>(() => getStoredGames())
   const [launching, setLaunching] = useState(false)
   const [launchError, setLaunchError] = useState<string | null>(null)
@@ -173,8 +171,8 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
   const heroGame = useMemo(() => {
     if (!heroEnabled) return null
     if (mode === 'random') return games.find((game) => game.id === randomHeroId && !game.missing) ?? null
-    return pickHeroGame(games, mode)
-  }, [games, heroEnabled, mode, randomHeroId])
+    return pickHeroGame(games, mode, lang)
+  }, [games, heroEnabled, lang, mode, randomHeroId])
 
   useEffect(() => {
     let cancelled = false
@@ -222,7 +220,7 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
         setRandomHeroId(pickRandomHeroId(updated, heroGame.id))
       }
     } catch (error) {
-      setLaunchError(error instanceof Error ? error.message : 'Kunde inte starta spelet.')
+      setLaunchError(error instanceof Error ? error.message : t('launchFailed'))
       onNavigate({ pageId: 'lumioplay-library' })
     } finally {
       setLaunching(false)
@@ -232,10 +230,10 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
   if (!heroGame) return null
 
   const title = getGameDisplayTitle(heroGame)
-  const platform = getPlatformLabel(getEffectivePlatform(heroGame))
+  const platform = getPlatformLabel(getEffectivePlatform(heroGame), t)
   const coverUrl = heroGame.coverUrl ?? heroGame.metadata?.coverUrl ?? null
   const releaseYear = heroGame.metadata?.releaseYear ?? null
-  const region = heroGame.metadata?.region ?? null
+  const region = getRegionLabel(heroGame.metadata?.region, t)
   const playCount = heroGame.playCount ?? 0
   const coverShellStyle = {
     width: '233px',
@@ -256,7 +254,7 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
           <p className="text-[10px] uppercase tracking-[0.24em] text-slate-400">Lumioplay Hero</p>
           <h2 className="text-[1.95rem] font-semibold leading-tight text-white">{title}</h2>
           <p className="max-w-[62ch] text-[1rem] leading-8 text-slate-300">
-            {summary ?? (mode === 'random' ? 'Slumpat spel från ditt bibliotek.' : 'Senast spelade spelet från ditt bibliotek.')}
+            {summary ?? (mode === 'random' ? t('heroRandomSubtitle') : t('heroLastPlayedSubtitle'))}
           </p>
           <div className="flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-white/15 bg-white/[0.06] px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-200">
@@ -274,12 +272,12 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
             ) : null}
             {playCount > 0 ? (
               <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">
-                Spelat {playCount}x
+                {t('heroPlayCount').replace('{count}', String(playCount))}
               </span>
             ) : null}
             {heroGame.lastPlayedAt ? (
               <span className="rounded-full border border-white/10 bg-black/25 px-3 py-1 text-[10px] uppercase tracking-[0.18em] text-slate-300">
-                Senast spelat
+                {t('lastPlayed')}
               </span>
             ) : null}
           </div>
@@ -290,7 +288,7 @@ export function LumioplayHero({ onNavigate, onActiveChange, onBackdropChange }: 
               disabled={launching}
               className="rounded-full border border-accent-400/40 bg-accent-500/90 px-6 py-2.5 text-[0.6rem] font-normal uppercase tracking-[0.2em] text-white transition hover:bg-accent-500 disabled:opacity-60"
             >
-              {launching ? 'Startar...' : 'Spela nu'}
+              {launching ? t('starting') : t('heroPlayNow')}
             </button>
           </div>
           {launchError ? <p className="text-xs text-rose-300">{launchError}</p> : null}

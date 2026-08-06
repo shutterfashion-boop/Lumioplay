@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { isPluginDesktopHost, pickPluginFolder } from '@/lib/plugin-sdk'
+import { isPluginDesktopHost, pickPluginFolder, useLang } from '@/lib/plugin-sdk'
 import {
   disableHomeOverridePlugin,
   getHomeOverridePluginId,
@@ -15,6 +15,7 @@ import {
   getHeroMode,
   getGamepadExitCombo,
   getGamepadMapping,
+  getJoypadBindingLabel,
   LUMIOPLAY_JOYPAD_BINDINGS,
   getRetroArchCoresPath,
   getRomFolders,
@@ -33,6 +34,8 @@ const pillClass =
 const activePillClass =
   'rounded-full border border-accent-400/50 bg-accent-400/10 px-4 py-2 text-[0.65rem] font-normal uppercase tracking-[0.2em] text-accent-300 transition-all'
 const HOME_OVERRIDE_PLUGIN_ID = 'com.lumio.lumioplay'
+const CORES_PATH_PLACEHOLDER = '/Applications/RetroArch.app/Contents/Resources/cores'
+const ROM_FOLDERS_PLACEHOLDER = '/Users/username/Games/ROMs/NES\n/Users/username/Games/ROMs/SNES'
 
 function CollapsibleSettingsCard({
   title,
@@ -74,6 +77,7 @@ function CollapsibleSettingsCard({
 }
 
 export function LumioplaySettingsSection() {
+  const { t } = useLang()
   const [retroArchCoresPath, setRetroArchCoresPathState] = useState(() => getRetroArchCoresPath())
   const [romFoldersText, setRomFoldersText] = useState(() => getRomFolders().join('\n'))
   const [autoSyncEnabled, setAutoSyncEnabledState] = useState(() => getAutoSyncEnabled())
@@ -90,6 +94,11 @@ export function LumioplaySettingsSection() {
   const [autoSyncExpanded, setAutoSyncExpanded] = useState(false)
   const [gamepadExpanded, setGamepadExpanded] = useState(false)
 
+  function describeBinding(bindingIndex: number): string {
+    const binding = LUMIOPLAY_JOYPAD_BINDINGS.find((entry) => entry.index === bindingIndex)
+    return binding ? getJoypadBindingLabel(binding, t) : String(bindingIndex)
+  }
+
   useEffect(() => {
     if (learningBinding === null) return
     let rafId = 0
@@ -103,7 +112,11 @@ export function LumioplaySettingsSection() {
         if (pressedIndex >= 0) {
           setGamepadMappingState((current) => ({ ...current, [learningBinding]: String(pressedIndex) }))
           setLearningBinding(null)
-          setStatusMessage(`Mappade ${LUMIOPLAY_JOYPAD_BINDINGS.find((b) => b.index === learningBinding)?.label ?? learningBinding} till gamepad-index ${pressedIndex}.`)
+          setStatusMessage(
+            t('settingsMappedToIndex')
+              .replace('{button}', describeBinding(learningBinding))
+              .replace('{index}', String(pressedIndex)),
+          )
           return
         }
         const axisIndex = pad.axes.findIndex((axis) => Math.abs(axis ?? 0) > 0.5)
@@ -113,7 +126,11 @@ export function LumioplaySettingsSection() {
           const mappingValue = `axis:${axisIndex}:${direction}`
           setGamepadMappingState((current) => ({ ...current, [learningBinding]: mappingValue }))
           setLearningBinding(null)
-          setStatusMessage(`Mappade ${LUMIOPLAY_JOYPAD_BINDINGS.find((b) => b.index === learningBinding)?.label ?? learningBinding} till ${mappingValue}.`)
+          setStatusMessage(
+            t('settingsMappedToValue')
+              .replace('{button}', describeBinding(learningBinding))
+              .replace('{value}', mappingValue),
+          )
           return
         }
       }
@@ -157,7 +174,7 @@ export function LumioplaySettingsSection() {
     setGamepadMapping(gamepadMapping)
     setGamepadExitCombo(parsedExitCombo)
     setSaved(true)
-    setStatusMessage('Inställningarna sparades.')
+    setStatusMessage(t('settingsSaved'))
     window.setTimeout(() => setSaved(false), 1800)
   }
 
@@ -166,9 +183,9 @@ export function LumioplaySettingsSection() {
       const picked = await pickPluginFolder()
       if (!picked) return
       setRetroArchCoresPathState(picked)
-      setStatusMessage('Libretro core-mappen uppdaterades.')
+      setStatusMessage(t('settingsCoresFolderUpdated'))
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Kunde inte välja mapp.'
+      const message = error instanceof Error ? error.message : t('settingsPickFolderFailed')
       setStatusMessage(message)
     }
   }
@@ -181,7 +198,7 @@ export function LumioplaySettingsSection() {
     }
     const result = tryEnableHomeOverridePlugin(HOME_OVERRIDE_PLUGIN_ID)
     if (!result.ok) {
-      setHomeOverrideError('Det finns redan en egen startsida satt. Avmarkera den forst innan du valjer en annan plugin.')
+      setHomeOverrideError(t('settingsHomeOverrideConflict'))
     }
   }
 
@@ -193,14 +210,14 @@ export function LumioplaySettingsSection() {
       </div>
 
       <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-4 text-sm text-slate-400">
-        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">Vad behövs?</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">{t('settingsWhatIsNeeded')}</p>
         <div className="mt-3 space-y-2">
           <p>
-            Lumioplay startar spel direkt i Lumio via inbäddade libretro-kärnor. Det enda som krävs är en fungerande{' '}
-            <span className="text-slate-300">libretro core-mapp</span>.
+            {t('settingsIntroLead')}{' '}
+            <span className="text-slate-300">{t('settingsIntroCoresFolder')}</span>.
           </p>
           <p>
-            Kärnor finns på{' '}
+            {t('settingsCoresAvailableAt')}{' '}
             <a
               href="https://buildbot.libretro.com/stable/"
               target="_blank"
@@ -222,21 +239,21 @@ export function LumioplaySettingsSection() {
             onChange={(event) => handleHomeOverrideToggle(event.target.checked)}
             className="h-4 w-4 accent-accent-400"
           />
-          <span>Anvand som startsida</span>
+          <span>{t('settingsUseAsHome')}</span>
         </label>
         <p className="mt-2 text-xs text-slate-500">
-          Ersatter vanliga Home-rader med Lumioplay-vyn men behaller hero och resten av startsidan.
+          {t('settingsUseAsHomeDesc')}
         </p>
         {homeOverrideError ? <p className="mt-2 text-xs text-rose-300">{homeOverrideError}</p> : null}
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Libretro core-mapp</label>
+        <label className="text-xs uppercase tracking-[0.16em] text-slate-500">{t('settingsCoresFolderLabel')}</label>
         <div className="flex gap-3">
           <input
             value={retroArchCoresPath}
             onChange={(event) => setRetroArchCoresPathState(event.target.value)}
-            placeholder="/Users/jerry/Documents/games/cores"
+            placeholder={CORES_PATH_PLACEHOLDER}
             className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-accent-400/30"
           />
           {isPluginDesktopHost() ? (
@@ -245,44 +262,44 @@ export function LumioplaySettingsSection() {
               onClick={() => void handlePickCoresFolder()}
               className={pillClass}
             >
-              Välj
+              {t('settingsChoose')}
             </button>
           ) : null}
         </div>
       </div>
 
       <div className="space-y-2">
-        <label className="text-xs uppercase tracking-[0.16em] text-slate-500">ROM folders</label>
+        <label className="text-xs uppercase tracking-[0.16em] text-slate-500">{t('settingsRomFoldersLabel')}</label>
         <textarea
           value={romFoldersText}
           onChange={(event) => setRomFoldersText(event.target.value)}
-          placeholder={"/Users/jerry/Games/ROMs/NES\n/Users/jerry/Games/ROMs/SNES"}
+          placeholder={ROM_FOLDERS_PLACEHOLDER}
           rows={6}
           className="w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-accent-400/30"
         />
       </div>
 
       <CollapsibleSettingsCard
-        title="Auto-sync"
-        description="Skannar sparade mappar i bakgrunden medan biblioteket är öppet."
+        title={t('settingsAutoSyncTitle')}
+        description={t('settingsAutoSyncDesc')}
         open={autoSyncExpanded}
         onToggle={() => setAutoSyncExpanded((value) => !value)}
       >
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">Status</p>
-            <p className="mt-1 text-sm text-slate-300">{autoSyncEnabled ? 'Aktiverad' : 'Avstängd'}</p>
+            <p className="text-xs uppercase tracking-[0.16em] text-slate-500">{t('settingsStatus')}</p>
+            <p className="mt-1 text-sm text-slate-300">{autoSyncEnabled ? t('settingsEnabled') : t('settingsDisabled')}</p>
           </div>
           <button
             type="button"
             onClick={() => setAutoSyncEnabledState((value) => !value)}
             className={autoSyncEnabled ? activePillClass : pillClass}
           >
-            {autoSyncEnabled ? 'På' : 'Av'}
+            {autoSyncEnabled ? t('settingsOn') : t('settingsOff')}
           </button>
         </div>
         <div className="mt-4 max-w-xs space-y-2">
-          <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Syncintervall i sekunder</label>
+          <label className="text-xs uppercase tracking-[0.16em] text-slate-500">{t('settingsSyncIntervalLabel')}</label>
           <input
             type="number"
             min={15}
@@ -299,7 +316,7 @@ export function LumioplaySettingsSection() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-sm font-medium text-white">Lumioplay Hero</p>
-            <p className="mt-1 text-sm text-slate-400">Visa ett spel högst upp på startsidan. Avstängt som standard.</p>
+            <p className="mt-1 text-sm text-slate-400">{t('settingsHeroDesc')}</p>
           </div>
           <label className="flex items-center gap-2">
             <input
@@ -308,27 +325,27 @@ export function LumioplaySettingsSection() {
               onChange={(event) => setHeroEnabledState(event.target.checked)}
               className="h-4 w-4 accent-accent-400"
             />
-            <span className="text-xs uppercase tracking-[0.16em] text-slate-300">Aktivera</span>
+            <span className="text-xs uppercase tracking-[0.16em] text-slate-300">{t('settingsEnable')}</span>
           </label>
         </div>
         {heroEnabled ? (
           <div className="mt-4 max-w-sm space-y-2">
-            <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Hero-läge</label>
+            <label className="text-xs uppercase tracking-[0.16em] text-slate-500">{t('settingsHeroMode')}</label>
             <select
               value={heroMode}
               onChange={(event) => setHeroModeState(event.target.value === 'random' ? 'random' : 'last_played')}
               className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-accent-400/30"
             >
-              <option value="last_played">Senast spelat</option>
-              <option value="random">Random spel</option>
+              <option value="last_played">{t('lastPlayed')}</option>
+              <option value="random">{t('settingsHeroModeRandom')}</option>
             </select>
           </div>
         ) : null}
       </div>
 
       <CollapsibleSettingsCard
-        title="Handkontroll"
-        description="Ställ in vilken gamepad-knapp eller axel som ska styra varje libretro-knapp."
+        title={t('settingsGamepadTitle')}
+        description={t('settingsGamepadDesc')}
         open={gamepadExpanded}
         onToggle={() => setGamepadExpanded((value) => !value)}
       >
@@ -339,7 +356,7 @@ export function LumioplaySettingsSection() {
               className="rounded-xl border border-white/10 bg-white/[0.03] px-3 py-3"
             >
               <div className="mb-2 text-xs uppercase tracking-[0.16em] text-slate-300">
-                {binding.label}
+                {getJoypadBindingLabel(binding, t)}
               </div>
               <div className="flex items-center gap-2">
                 <input
@@ -352,7 +369,7 @@ export function LumioplaySettingsSection() {
                       [binding.index]: value || '0',
                     }))
                   }}
-                  placeholder="0 eller axis:1:-1"
+                  placeholder={t('settingsMappingPlaceholder')}
                   className="h-10 min-w-0 flex-1 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-sm text-white outline-none transition focus:border-accent-400/30"
                 />
                 <button
@@ -360,24 +377,24 @@ export function LumioplaySettingsSection() {
                   onClick={() => setLearningBinding((current) => (current === binding.index ? null : binding.index))}
                   className={`${learningBinding === binding.index ? activePillClass : pillClass} h-10 shrink-0 px-4 text-[0.6rem]`}
                 >
-                  {learningBinding === binding.index ? 'Tryck knapp...' : 'Lär'}
+                  {learningBinding === binding.index ? t('settingsPressButton') : t('settingsLearn')}
                 </button>
               </div>
             </div>
           ))}
         </div>
         <div className="mt-4 space-y-2">
-          <p className="text-xs text-slate-500">`Lär` stödjer både knappar och styrkors som axlar, t.ex. `axis:0:-1`.</p>
+          <p className="text-xs text-slate-500">{t('settingsLearnHint').replace('{action}', t('settingsLearn'))}</p>
         </div>
         <div className="mt-4 space-y-2">
-          <label className="text-xs uppercase tracking-[0.16em] text-slate-500">Avsluta-spel kombination (gamepad-index, komma-separerat)</label>
+          <label className="text-xs uppercase tracking-[0.16em] text-slate-500">{t('settingsExitComboLabel')}</label>
           <input
             value={exitComboText}
             onChange={(event) => setExitComboText(event.target.value)}
             placeholder="8, 9"
             className="h-11 w-full max-w-sm rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white placeholder:text-slate-500 outline-none transition focus:border-accent-400/30"
           />
-          <p className="text-xs text-slate-500">Standard är 8, 9 (Select + Start).</p>
+          <p className="text-xs text-slate-500">{t('settingsExitComboHint')}</p>
         </div>
       </CollapsibleSettingsCard>
 
@@ -387,9 +404,9 @@ export function LumioplaySettingsSection() {
           onClick={handleSave}
           className={activePillClass}
         >
-          Spara
+          {t('settingsSave')}
         </button>
-        {saved ? <span className="text-xs text-emerald-400">Sparad</span> : null}
+        {saved ? <span className="text-xs text-emerald-400">{t('settingsSavedBadge')}</span> : null}
       </div>
       {statusMessage ? <p className="text-sm text-emerald-300">{statusMessage}</p> : null}
     </div>
