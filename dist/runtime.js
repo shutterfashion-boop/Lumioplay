@@ -11,7 +11,7 @@
     LumioplayPlugin: () => LumioplayPlugin
   });
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-PJrV59/react-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-5WInSk/react-shim.ts
   var react = globalThis.__lumioPluginRuntime?.react ?? globalThis.React;
   if (!react) {
     throw new Error("Lumio plugin runtime host has not initialized React.");
@@ -86,7 +86,8 @@
     browserRemoveFavorite: "Remove favorite",
     browserEmptyLibrary: "No games found yet. Add ROM files or pick a ROM folder in settings.",
     browserMissing: "Missing",
-    browserCardSize: "Card size",
+    settingsGridTitle: "Card size",
+    settingsGridDesc: 'How large the game cards are, per console. "All" is the default and drives the mixed view.',
     browserNoCore: "No core",
     browserPlay: "Play",
     browserCustomize: "Customize",
@@ -223,7 +224,8 @@
     browserRemoveFavorite: "Ta bort favorit",
     browserEmptyLibrary: "Inga spel hittades \xE4nnu. L\xE4gg till ROM-filer eller v\xE4lj en ROM-mapp i inst\xE4llningarna.",
     browserMissing: "Saknas",
-    browserCardSize: "Kortstorlek",
+    settingsGridTitle: "Kortstorlek",
+    settingsGridDesc: 'Hur stora spelkorten \xE4r, per konsol. "Alla" \xE4r standardvalet och styr blandvyn.',
     browserNoCore: "Ingen core",
     browserPlay: "Spela",
     browserCustomize: "Anpassa",
@@ -664,7 +666,7 @@
   var KEY_ROM_FOLDERS = "lumioplay_rom_folders";
   var KEY_RETROARCH_PATH = "lumioplay_retroarch_path";
   var KEY_RETROARCH_CORES_PATH = "lumioplay_retroarch_cores_path";
-  var KEY_GRID_DENSITY = "lumioplay_grid_density_v1";
+  var KEY_GRID_DENSITY = "lumioplay_grid_density_v2";
   var KEY_GAMEPAD_MAPPING = "lumioplay_gamepad_mapping_v2";
   var KEY_GAMEPAD_EXIT_COMBO = "lumioplay_gamepad_exit_combo_v1";
   var DEFAULT_SETTINGS = {
@@ -1256,12 +1258,40 @@
     setScopedStorageItem(KEY_GAMEPAD_EXIT_COMBO, JSON.stringify(normalized));
   }
   var GRID_DENSITIES = ["compact", "standard", "large", "xl"];
-  function getGridDensity() {
-    const stored = getScopedStorageItem(KEY_GRID_DENSITY);
-    return stored && GRID_DENSITIES.includes(stored) ? stored : "standard";
+  var GRID_DENSITY_CHANGED_EVENT = "lumioplay-grid-density-changed";
+  function getGridDensityMap() {
+    try {
+      const raw = getScopedStorageItem(KEY_GRID_DENSITY);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      const map = {};
+      for (const [key, value] of Object.entries(parsed)) {
+        if (GRID_DENSITIES.includes(value)) {
+          map[key] = value;
+        }
+      }
+      return map;
+    } catch {
+      return {};
+    }
   }
-  function setGridDensity(value) {
-    setScopedStorageItem(KEY_GRID_DENSITY, value);
+  function getGridDensityFor(platform) {
+    const map = getGridDensityMap();
+    return map[platform] ?? map.all ?? "standard";
+  }
+  function setGridDensityFor(platform, value) {
+    const map = getGridDensityMap();
+    map[platform] = value;
+    setScopedStorageItem(KEY_GRID_DENSITY, JSON.stringify(map));
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent(GRID_DENSITY_CHANGED_EVENT));
+    }
+  }
+  function onGridDensityChanged(listener) {
+    if (typeof window === "undefined") return () => {
+    };
+    window.addEventListener(GRID_DENSITY_CHANGED_EVENT, listener);
+    return () => window.removeEventListener(GRID_DENSITY_CHANGED_EVENT, listener);
   }
 
   // runtime/lumioplay-launcher.ts
@@ -1387,7 +1417,7 @@
     await launchLibretroGame(corePath, game.romPath);
   }
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-PJrV59/jsx-runtime-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-5WInSk/jsx-runtime-shim.ts
   var runtime = globalThis.__lumioPluginRuntime?.jsxRuntime;
   if (!runtime) {
     throw new Error("Lumio plugin runtime host has not initialized JSX runtime.");
@@ -1631,39 +1661,6 @@
     const factor = GRID_DENSITY_FACTOR[density] ?? 1;
     return { aspectRatio: base.aspectRatio, minColWidth: Math.round(base.minColWidth * factor) };
   }
-  var GRID_DENSITY_ORDER = ["compact", "standard", "large", "xl"];
-  var GRID_DENSITY_LABEL = {
-    compact: "S",
-    standard: "M",
-    large: "L",
-    xl: "XL"
-  };
-  function GridDensityPicker({
-    value,
-    onChange,
-    label
-  }) {
-    return /* @__PURE__ */ jsx("div", { className: "flex items-center gap-1", title: label, "aria-label": label, children: GRID_DENSITY_ORDER.map((density) => {
-      const selected = density === value;
-      return /* @__PURE__ */ jsx(
-        "button",
-        {
-          type: "button",
-          onClick: () => onChange(density),
-          className: `h-9 rounded-full border px-3 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${selected ? activePillClass : neutralPillClass}`,
-          children: GRID_DENSITY_LABEL[density]
-        },
-        density
-      );
-    }) });
-  }
-  function gridContainerStyle(profile) {
-    return {
-      display: "grid",
-      gap: "0.75rem",
-      gridTemplateColumns: `repeat(auto-fill, minmax(${profile.minColWidth}px, 1fr))`
-    };
-  }
   function PlatformChips({
     active,
     onChange,
@@ -1757,7 +1754,7 @@
   function GamesGrid({
     games,
     activePlatform,
-    gridDensity,
+    gridDensityTick,
     launchState,
     editingGameId,
     onEditGame,
@@ -1769,7 +1766,8 @@
     const { t } = useLang();
     const platformOptions = getPlatformOptions();
     const coreSuggestions = getCoreSuggestions();
-    const gridProfile = getGridProfileForPlatform(activePlatform, gridDensity);
+    void gridDensityTick;
+    const gridProfile = getGridProfileForPlatform(activePlatform, getGridDensityFor(activePlatform));
     if (games.length === 0) {
       return /* @__PURE__ */ jsx("div", { className: "rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-sm text-slate-400", children: t("browserEmptyLibrary") });
     }
@@ -1778,7 +1776,7 @@
       const effectiveCore = getEffectiveCoreId(game);
       const editing = editingGameId === game.id;
       const displayCoverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null;
-      const posterAspectRatio = getGridProfileForPlatform(effectivePlatform, gridDensity).aspectRatio;
+      const posterAspectRatio = getGridProfileForPlatform(effectivePlatform).aspectRatio;
       const regionLabel = getRegionLabel(game.metadata?.region, t);
       return /* @__PURE__ */ jsxs(
         "div",
@@ -1879,7 +1877,8 @@
     const [games, setGames] = useState(() => getStoredGames());
     const [platform, setPlatform] = useState("all");
     const [query, setQuery] = useState("");
-    const [gridDensity, setGridDensityState] = useState(() => getGridDensity());
+    const [gridDensityTick, setGridDensityTick] = useState(0);
+    useEffect(() => onGridDensityChanged(() => setGridDensityTick((v) => v + 1)), []);
     const [statusMessage, setStatusMessage] = useState(null);
     const [launchState, setLaunchState] = useState({
       gameId: null,
@@ -2579,18 +2578,7 @@
               className: "h-9 w-full max-w-xs rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-[0.8rem] text-white placeholder:text-slate-500 outline-none transition-all focus:border-accent-400/30 focus:bg-white/[0.07]"
             }
           ),
-          /* @__PURE__ */ jsx(PlatformChips, { active: resolvedPlatform, onChange: setPlatform, games }),
-          /* @__PURE__ */ jsx(
-            GridDensityPicker,
-            {
-              value: gridDensity,
-              onChange: (value) => {
-                setGridDensityState(value);
-                setGridDensity(value);
-              },
-              label: t("browserCardSize")
-            }
-          )
+          /* @__PURE__ */ jsx(PlatformChips, { active: resolvedPlatform, onChange: setPlatform, games })
         ] }),
         statusMessage ? /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-400", children: statusMessage }) : null,
         posterSyncProgress ? /* @__PURE__ */ jsxs("p", { className: "text-xs uppercase tracking-[0.16em] text-slate-500", children: [
@@ -2609,7 +2597,7 @@
       /* @__PURE__ */ jsx(
         GamesGrid,
         {
-          gridDensity,
+          gridDensityTick,
           games: filteredGames,
           activePlatform: resolvedPlatform,
           launchState,
@@ -3288,6 +3276,8 @@
     const [homeOverrideError, setHomeOverrideError] = useState(null);
     const [autoSyncExpanded, setAutoSyncExpanded] = useState(false);
     const [gamepadExpanded, setGamepadExpanded] = useState(false);
+    const [gridExpanded, setGridExpanded] = useState(false);
+    const [gridDensityMap, setGridDensityMapState] = useState(() => getGridDensityMap());
     function describeBinding(bindingIndex) {
       const binding = LUMIOPLAY_JOYPAD_BINDINGS.find((entry) => entry.index === bindingIndex);
       return binding ? getJoypadBindingLabel(binding, t) : String(bindingIndex);
@@ -3500,6 +3490,42 @@
           ]
         }
       ),
+      /* @__PURE__ */ jsx(
+        CollapsibleSettingsCard,
+        {
+          title: t("settingsGridTitle"),
+          description: t("settingsGridDesc"),
+          open: gridExpanded,
+          onToggle: () => setGridExpanded((value) => !value),
+          children: /* @__PURE__ */ jsx("div", { className: "space-y-2", children: LUMIOPLAY_PLATFORMS.map((platform) => {
+            const selected = gridDensityMap[platform.id] ?? (platform.id === "all" ? "standard" : gridDensityMap.all ?? "standard");
+            const inherited = platform.id !== "all" && !gridDensityMap[platform.id];
+            return /* @__PURE__ */ jsxs("div", { className: "flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5", children: [
+              /* @__PURE__ */ jsxs("p", { className: "text-sm text-slate-200", children: [
+                platform.id === "all" ? t("platformAll") : platform.label,
+                inherited ? /* @__PURE__ */ jsxs("span", { className: "ml-2 text-xs text-slate-500", children: [
+                  "(",
+                  t("platformAll"),
+                  ")"
+                ] }) : null
+              ] }),
+              /* @__PURE__ */ jsx("div", { className: "flex items-center gap-1", children: ["compact", "standard", "large", "xl"].map((density) => /* @__PURE__ */ jsx(
+                "button",
+                {
+                  type: "button",
+                  onClick: () => {
+                    setGridDensityFor(platform.id, density);
+                    setGridDensityMapState(getGridDensityMap());
+                  },
+                  className: selected === density && !inherited ? activePillClass2 : pillClass,
+                  children: density === "compact" ? "S" : density === "standard" ? "M" : density === "large" ? "L" : "XL"
+                },
+                density
+              )) })
+            ] }, platform.id);
+          }) })
+        }
+      ),
       /* @__PURE__ */ jsxs("div", { className: "rounded-2xl border border-white/10 bg-slate-900/60 p-4", children: [
         /* @__PURE__ */ jsxs("div", { className: "flex flex-wrap items-center justify-between gap-3", children: [
           /* @__PURE__ */ jsxs("div", { children: [
@@ -3667,7 +3693,7 @@
     }
   };
 
-  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-PJrV59/wrapper-entry.ts
+  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-5WInSk/wrapper-entry.ts
   var plugin = Reflect.get(runtime_exports, "default") ?? Reflect.get(runtime_exports, "LumioplayPlugin") ?? Object.values(runtime_exports).find((value) => value && typeof value === "object" && "id" in value && "register" in value);
   if (!plugin) {
     throw new Error("Could not find Lumioplay plugin export in bundle.");

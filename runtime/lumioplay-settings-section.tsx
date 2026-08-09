@@ -27,6 +27,12 @@ import {
   setGamepadMapping,
   setRetroArchCoresPath,
   setRomFolders,
+  LUMIOPLAY_PLATFORMS,
+  getGridDensityMap,
+  setGridDensityFor,
+  type LumioplayGridDensity,
+  type LumioplayGridDensityMap,
+  type LumioplayPlatformId,
 } from './lumioplay-storage'
 
 const pillClass =
@@ -93,6 +99,8 @@ export function LumioplaySettingsSection() {
   const [homeOverrideError, setHomeOverrideError] = useState<string | null>(null)
   const [autoSyncExpanded, setAutoSyncExpanded] = useState(false)
   const [gamepadExpanded, setGamepadExpanded] = useState(false)
+  const [gridExpanded, setGridExpanded] = useState(false)
+  const [gridDensityMap, setGridDensityMapState] = useState<LumioplayGridDensityMap>(() => getGridDensityMap())
 
   function describeBinding(bindingIndex: number): string {
     const binding = LUMIOPLAY_JOYPAD_BINDINGS.find((entry) => entry.index === bindingIndex)
@@ -309,6 +317,45 @@ export function LumioplaySettingsSection() {
             onChange={(event) => setAutoSyncIntervalSecondsState(Number(event.target.value))}
             className="h-11 w-full rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm text-white outline-none transition focus:border-accent-400/30"
           />
+        </div>
+      </CollapsibleSettingsCard>
+
+      <CollapsibleSettingsCard
+        title={t('settingsGridTitle')}
+        description={t('settingsGridDesc')}
+        open={gridExpanded}
+        onToggle={() => setGridExpanded((value) => !value)}
+      >
+        <div className="space-y-2">
+          {LUMIOPLAY_PLATFORMS.map((platform) => {
+            const selected: LumioplayGridDensity =
+              gridDensityMap[platform.id]
+              ?? (platform.id === 'all' ? 'standard' : gridDensityMap.all ?? 'standard')
+            const inherited = platform.id !== 'all' && !gridDensityMap[platform.id]
+            return (
+              <div key={platform.id} className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-white/[0.06] bg-white/[0.02] px-4 py-2.5">
+                <p className="text-sm text-slate-200">
+                  {platform.id === 'all' ? t('platformAll') : platform.label}
+                  {inherited ? <span className="ml-2 text-xs text-slate-500">({t('platformAll')})</span> : null}
+                </p>
+                <div className="flex items-center gap-1">
+                  {(['compact', 'standard', 'large', 'xl'] as LumioplayGridDensity[]).map((density) => (
+                    <button
+                      key={density}
+                      type="button"
+                      onClick={() => {
+                        setGridDensityFor(platform.id as LumioplayPlatformId, density)
+                        setGridDensityMapState(getGridDensityMap())
+                      }}
+                      className={selected === density && !inherited ? activePillClass : pillClass}
+                    >
+                      {density === 'compact' ? 'S' : density === 'standard' ? 'M' : density === 'large' ? 'L' : 'XL'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
         </div>
       </CollapsibleSettingsCard>
 

@@ -16,7 +16,7 @@ const KEY_GAMES = 'lumioplay_games'
 const KEY_ROM_FOLDERS = 'lumioplay_rom_folders'
 const KEY_RETROARCH_PATH = 'lumioplay_retroarch_path'
 const KEY_RETROARCH_CORES_PATH = 'lumioplay_retroarch_cores_path'
-const KEY_GRID_DENSITY = 'lumioplay_grid_density_v1'
+const KEY_GRID_DENSITY = 'lumioplay_grid_density_v2'
 const KEY_GAMEPAD_MAPPING = 'lumioplay_gamepad_mapping_v2'
 const KEY_GAMEPAD_EXIT_COMBO = 'lumioplay_gamepad_exit_combo_v1'
 
@@ -743,19 +743,54 @@ export function setGamepadExitCombo(combo: number[]): void {
 
 
 // ── Grid density ────────────────────────────────────────────────────────────
-// How tightly the game grid packs its cards. The per-console aspect ratios
-// stay fixed; density only scales the minimum column width, so every console
-// gets proportionally larger or smaller cards.
+// How tightly the game grid packs its cards, PER CONSOLE. The per-console
+// aspect ratios stay fixed; density only scales the minimum column width, so
+// a console gets proportionally larger or smaller cards. The 'all' entry is
+// the default: it drives the mixed view and any console without an explicit
+// choice of its own.
 
 export type LumioplayGridDensity = 'compact' | 'standard' | 'large' | 'xl'
 
 const GRID_DENSITIES: LumioplayGridDensity[] = ['compact', 'standard', 'large', 'xl']
+const GRID_DENSITY_CHANGED_EVENT = 'lumioplay-grid-density-changed'
 
-export function getGridDensity(): LumioplayGridDensity {
-  const stored = getScopedStorageItem(KEY_GRID_DENSITY) as LumioplayGridDensity | null
-  return stored && GRID_DENSITIES.includes(stored) ? stored : 'standard'
+export type LumioplayGridDensityMap = Partial<Record<LumioplayPlatformId, LumioplayGridDensity>>
+
+export function getGridDensityMap(): LumioplayGridDensityMap {
+  try {
+    const raw = getScopedStorageItem(KEY_GRID_DENSITY)
+    if (!raw) return {}
+    const parsed = JSON.parse(raw) as Record<string, unknown>
+    const map: LumioplayGridDensityMap = {}
+    for (const [key, value] of Object.entries(parsed)) {
+      if (GRID_DENSITIES.includes(value as LumioplayGridDensity)) {
+        map[key as LumioplayPlatformId] = value as LumioplayGridDensity
+      }
+    }
+    return map
+  } catch {
+    return {}
+  }
 }
 
-export function setGridDensity(value: LumioplayGridDensity): void {
-  setScopedStorageItem(KEY_GRID_DENSITY, value)
+export function getGridDensityFor(platform: LumioplayPlatformId): LumioplayGridDensity {
+  const map = getGridDensityMap()
+  return map[platform] ?? map.all ?? 'standard'
+}
+
+export function setGridDensityFor(platform: LumioplayPlatformId, value: LumioplayGridDensity): void {
+  const map = getGridDensityMap()
+  map[platform] = value
+  setScopedStorageItem(KEY_GRID_DENSITY, JSON.stringify(map))
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent(GRID_DENSITY_CHANGED_EVENT))
+  }
+}
+
+/// The settings section writes, the browser grid listens — they live in
+/// different views, so a storage write alone would not re-render the grid.
+export function onGridDensityChanged(listener: () => void): () => void {
+  if (typeof window === 'undefined') return () => {}
+  window.addEventListener(GRID_DENSITY_CHANGED_EVENT, listener)
+  return () => window.removeEventListener(GRID_DENSITY_CHANGED_EVENT, listener)
 }
