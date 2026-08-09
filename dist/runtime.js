@@ -11,7 +11,7 @@
     LumioplayPlugin: () => LumioplayPlugin
   });
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-5WInSk/react-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7mqog3/react-shim.ts
   var react = globalThis.__lumioPluginRuntime?.react ?? globalThis.React;
   if (!react) {
     throw new Error("Lumio plugin runtime host has not initialized React.");
@@ -1417,7 +1417,7 @@
     await launchLibretroGame(corePath, game.romPath);
   }
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-5WInSk/jsx-runtime-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7mqog3/jsx-runtime-shim.ts
   var runtime = globalThis.__lumioPluginRuntime?.jsxRuntime;
   if (!runtime) {
     throw new Error("Lumio plugin runtime host has not initialized JSX runtime.");
@@ -1660,6 +1660,13 @@
     const base = platform === "all" ? DEFAULT_GRID_PROFILE : GRID_PROFILE_BY_PLATFORM[platform] ?? DEFAULT_GRID_PROFILE;
     const factor = GRID_DENSITY_FACTOR[density] ?? 1;
     return { aspectRatio: base.aspectRatio, minColWidth: Math.round(base.minColWidth * factor) };
+  }
+  function gridContainerStyle(profile) {
+    return {
+      display: "grid",
+      gap: "0.75rem",
+      gridTemplateColumns: `repeat(auto-fill, minmax(${profile.minColWidth}px, 1fr))`
+    };
   }
   function PlatformChips({
     active,
@@ -3693,7 +3700,7 @@
     }
   };
 
-  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-5WInSk/wrapper-entry.ts
+  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-7mqog3/wrapper-entry.ts
   var plugin = Reflect.get(runtime_exports, "default") ?? Reflect.get(runtime_exports, "LumioplayPlugin") ?? Object.values(runtime_exports).find((value) => value && typeof value === "object" && "id" in value && "register" in value);
   if (!plugin) {
     throw new Error("Could not find Lumioplay plugin export in bundle.");

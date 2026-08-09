@@ -340,6 +340,14 @@ function getGridProfileForPlatform(
   return { aspectRatio: base.aspectRatio, minColWidth: Math.round(base.minColWidth * factor) }
 }
 
+function gridContainerStyle(profile: GridProfile): CSSProperties {
+  return {
+    display: 'grid',
+    gap: '0.75rem',
+    gridTemplateColumns: `repeat(auto-fill, minmax(${profile.minColWidth}px, 1fr))`,
+  }
+}
+
 function PlatformChips({
   active,
   onChange,
