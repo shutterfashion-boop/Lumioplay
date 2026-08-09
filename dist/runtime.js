@@ -11,7 +11,7 @@
     LumioplayPlugin: () => LumioplayPlugin
   });
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-w2oY1a/react-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-MbljoJ/react-shim.ts
   var react = globalThis.__lumioPluginRuntime?.react ?? globalThis.React;
   if (!react) {
     throw new Error("Lumio plugin runtime host has not initialized React.");
@@ -1376,7 +1376,7 @@
     await launchLibretroGame(corePath, game.romPath);
   }
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-w2oY1a/jsx-runtime-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-MbljoJ/jsx-runtime-shim.ts
   var runtime = globalThis.__lumioPluginRuntime?.jsxRuntime;
   if (!runtime) {
     throw new Error("Lumio plugin runtime host has not initialized JSX runtime.");
@@ -3609,7 +3609,7 @@
     }
   };
 
-  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-w2oY1a/wrapper-entry.ts
+  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-MbljoJ/wrapper-entry.ts
   var plugin = Reflect.get(runtime_exports, "default") ?? Reflect.get(runtime_exports, "LumioplayPlugin") ?? Object.values(runtime_exports).find((value) => value && typeof value === "object" && "id" in value && "register" in value);
   if (!plugin) {
     throw new Error("Could not find Lumioplay plugin export in bundle.");
