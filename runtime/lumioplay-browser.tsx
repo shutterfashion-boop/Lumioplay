@@ -38,6 +38,9 @@ import {
   syncFolderGames,
   toggleFavorite,
   upsertImportedGames,
+  getGridDensity,
+  setGridDensity,
+  type LumioplayGridDensity,
 } from './lumioplay-storage'
 import {
   canLaunchGame,
@@ -315,9 +318,64 @@ const GRID_PROFILE_BY_PLATFORM: Record<LumioplayConsoleId, GridProfile> = {
   ps1: { aspectRatio: 0.69, minColWidth: 150 },       // portrait jewel case
 }
 
-function getGridProfileForPlatform(platform: LumioplayPlatformId): GridProfile {
-  if (platform === 'all') return DEFAULT_GRID_PROFILE
-  return GRID_PROFILE_BY_PLATFORM[platform] ?? DEFAULT_GRID_PROFILE
+// Density scales the min column width uniformly across consoles: the
+// per-console aspect ratios stay fixed, only how many cards fit per row
+// changes. NES's narrow portrait boxes pack very tight at 'standard' on a
+// wide window — 'large'/'xl' are the remedy without touching the ratios.
+const GRID_DENSITY_FACTOR: Record<LumioplayGridDensity, number> = {
+  compact: 0.8,
+  standard: 1,
+  large: 1.3,
+  xl: 1.65,
+}
+
+function getGridProfileForPlatform(
+  platform: LumioplayPlatformId,
+  density: LumioplayGridDensity = 'standard',
+): GridProfile {
+  const base = platform === 'all'
+    ? DEFAULT_GRID_PROFILE
+    : GRID_PROFILE_BY_PLATFORM[platform] ?? DEFAULT_GRID_PROFILE
+  const factor = GRID_DENSITY_FACTOR[density] ?? 1
+  return { aspectRatio: base.aspectRatio, minColWidth: Math.round(base.minColWidth * factor) }
+}
+
+const GRID_DENSITY_ORDER: LumioplayGridDensity[] = ['compact', 'standard', 'large', 'xl']
+const GRID_DENSITY_LABEL: Record<LumioplayGridDensity, string> = {
+  compact: 'S',
+  standard: 'M',
+  large: 'L',
+  xl: 'XL',
+}
+
+function GridDensityPicker({
+  value,
+  onChange,
+  label,
+}: {
+  value: LumioplayGridDensity
+  onChange: (value: LumioplayGridDensity) => void
+  label: string
+}) {
+  return (
+    <div className="flex items-center gap-1" title={label} aria-label={label}>
+      {GRID_DENSITY_ORDER.map((density) => {
+        const selected = density === value
+        return (
+          <button
+            key={density}
+            type="button"
+            onClick={() => onChange(density)}
+            className={`h-9 rounded-full border px-3 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${
+              selected ? activePillClass : neutralPillClass
+            }`}
+          >
+            {GRID_DENSITY_LABEL[density]}
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function gridContainerStyle(profile: GridProfile): CSSProperties {
@@ -450,6 +508,7 @@ function StarButton({
 function GamesGrid({
   games,
   activePlatform,
+  gridDensity,
   launchState,
   editingGameId,
   onEditGame,
@@ -460,6 +519,7 @@ function GamesGrid({
 }: {
   games: LumioplayGame[]
   activePlatform: LumioplayPlatformId
+  gridDensity: LumioplayGridDensity
   launchState: { gameId: string | null; message: string | null }
   editingGameId: string | null
   onEditGame: (gameId: string | null) => void
@@ -471,7 +531,7 @@ function GamesGrid({
   const { t } = useLang()
   const platformOptions = getPlatformOptions()
   const coreSuggestions = getCoreSuggestions()
-  const gridProfile = getGridProfileForPlatform(activePlatform)
+  const gridProfile = getGridProfileForPlatform(activePlatform, gridDensity)
 
   if (games.length === 0) {
     return (
@@ -488,7 +548,7 @@ function GamesGrid({
         const effectiveCore = getEffectiveCoreId(game)
         const editing = editingGameId === game.id
         const displayCoverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null
-        const posterAspectRatio = getGridProfileForPlatform(effectivePlatform).aspectRatio
+        const posterAspectRatio = getGridProfileForPlatform(effectivePlatform, gridDensity).aspectRatio
         const regionLabel = getRegionLabel(game.metadata?.region, t)
 
         return (
@@ -611,6 +671,7 @@ export function LumioplayBrowsePage(_props: BrowsePageProps) {
   const [games, setGames] = useState<LumioplayGame[]>(() => getStoredGames())
   const [platform, setPlatform] = useState<LumioplayPlatformId>('all')
   const [query, setQuery] = useState('')
+  const [gridDensity, setGridDensityState] = useState<LumioplayGridDensity>(() => getGridDensity())
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [launchState, setLaunchState] = useState<{ gameId: string | null; message: string | null }>({
     gameId: null,
@@ -1447,6 +1508,14 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
             className="h-9 w-full max-w-xs rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-[0.8rem] text-white placeholder:text-slate-500 outline-none transition-all focus:border-accent-400/30 focus:bg-white/[0.07]"
           />
           <PlatformChips active={resolvedPlatform} onChange={setPlatform} games={games} />
+          <GridDensityPicker
+            value={gridDensity}
+            onChange={(value) => {
+              setGridDensityState(value)
+              setGridDensity(value)
+            }}
+            label={t('browserCardSize')}
+          />
         </div>
         {statusMessage ? <p className="text-sm text-slate-400">{statusMessage}</p> : null}
         {posterSyncProgress ? (
@@ -1459,6 +1528,7 @@ function rankPosterEntryForGame(entry: string, game: LumioplayGame): number {
         {launchState.message ? <p className="text-sm text-rose-300">{launchState.message}</p> : null}
       </div>
       <GamesGrid
+        gridDensity={gridDensity}
         games={filteredGames}
         activePlatform={resolvedPlatform}
         launchState={launchState}

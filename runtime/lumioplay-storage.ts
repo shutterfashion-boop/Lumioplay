@@ -16,6 +16,7 @@ const KEY_GAMES = 'lumioplay_games'
 const KEY_ROM_FOLDERS = 'lumioplay_rom_folders'
 const KEY_RETROARCH_PATH = 'lumioplay_retroarch_path'
 const KEY_RETROARCH_CORES_PATH = 'lumioplay_retroarch_cores_path'
+const KEY_GRID_DENSITY = 'lumioplay_grid_density_v1'
 const KEY_GAMEPAD_MAPPING = 'lumioplay_gamepad_mapping_v2'
 const KEY_GAMEPAD_EXIT_COMBO = 'lumioplay_gamepad_exit_combo_v1'
 
@@ -738,4 +739,23 @@ export function getGamepadExitCombo(): number[] {
 export function setGamepadExitCombo(combo: number[]): void {
   const normalized = normalizeExitCombo(combo)
   setScopedStorageItem(KEY_GAMEPAD_EXIT_COMBO, JSON.stringify(normalized))
+}
+
+
+// ── Grid density ────────────────────────────────────────────────────────────
+// How tightly the game grid packs its cards. The per-console aspect ratios
+// stay fixed; density only scales the minimum column width, so every console
+// gets proportionally larger or smaller cards.
+
+export type LumioplayGridDensity = 'compact' | 'standard' | 'large' | 'xl'
+
+const GRID_DENSITIES: LumioplayGridDensity[] = ['compact', 'standard', 'large', 'xl']
+
+export function getGridDensity(): LumioplayGridDensity {
+  const stored = getScopedStorageItem(KEY_GRID_DENSITY) as LumioplayGridDensity | null
+  return stored && GRID_DENSITIES.includes(stored) ? stored : 'standard'
+}
+
+export function setGridDensity(value: LumioplayGridDensity): void {
+  setScopedStorageItem(KEY_GRID_DENSITY, value)
 }

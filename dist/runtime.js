@@ -11,7 +11,7 @@
     LumioplayPlugin: () => LumioplayPlugin
   });
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-MbljoJ/react-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-PJrV59/react-shim.ts
   var react = globalThis.__lumioPluginRuntime?.react ?? globalThis.React;
   if (!react) {
     throw new Error("Lumio plugin runtime host has not initialized React.");
@@ -86,6 +86,7 @@
     browserRemoveFavorite: "Remove favorite",
     browserEmptyLibrary: "No games found yet. Add ROM files or pick a ROM folder in settings.",
     browserMissing: "Missing",
+    browserCardSize: "Card size",
     browserNoCore: "No core",
     browserPlay: "Play",
     browserCustomize: "Customize",
@@ -222,6 +223,7 @@
     browserRemoveFavorite: "Ta bort favorit",
     browserEmptyLibrary: "Inga spel hittades \xE4nnu. L\xE4gg till ROM-filer eller v\xE4lj en ROM-mapp i inst\xE4llningarna.",
     browserMissing: "Saknas",
+    browserCardSize: "Kortstorlek",
     browserNoCore: "Ingen core",
     browserPlay: "Spela",
     browserCustomize: "Anpassa",
@@ -662,6 +664,7 @@
   var KEY_ROM_FOLDERS = "lumioplay_rom_folders";
   var KEY_RETROARCH_PATH = "lumioplay_retroarch_path";
   var KEY_RETROARCH_CORES_PATH = "lumioplay_retroarch_cores_path";
+  var KEY_GRID_DENSITY = "lumioplay_grid_density_v1";
   var KEY_GAMEPAD_MAPPING = "lumioplay_gamepad_mapping_v2";
   var KEY_GAMEPAD_EXIT_COMBO = "lumioplay_gamepad_exit_combo_v1";
   var DEFAULT_SETTINGS = {
@@ -1252,6 +1255,14 @@
     const normalized = normalizeExitCombo(combo);
     setScopedStorageItem(KEY_GAMEPAD_EXIT_COMBO, JSON.stringify(normalized));
   }
+  var GRID_DENSITIES = ["compact", "standard", "large", "xl"];
+  function getGridDensity() {
+    const stored = getScopedStorageItem(KEY_GRID_DENSITY);
+    return stored && GRID_DENSITIES.includes(stored) ? stored : "standard";
+  }
+  function setGridDensity(value) {
+    setScopedStorageItem(KEY_GRID_DENSITY, value);
+  }
 
   // runtime/lumioplay-launcher.ts
   function isAbsolutePath(path) {
@@ -1376,7 +1387,7 @@
     await launchLibretroGame(corePath, game.romPath);
   }
 
-  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-MbljoJ/jsx-runtime-shim.ts
+  // ../../../../var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-PJrV59/jsx-runtime-shim.ts
   var runtime = globalThis.__lumioPluginRuntime?.jsxRuntime;
   if (!runtime) {
     throw new Error("Lumio plugin runtime host has not initialized JSX runtime.");
@@ -1609,9 +1620,42 @@
     ps1: { aspectRatio: 0.69, minColWidth: 150 }
     // portrait jewel case
   };
-  function getGridProfileForPlatform(platform) {
-    if (platform === "all") return DEFAULT_GRID_PROFILE;
-    return GRID_PROFILE_BY_PLATFORM[platform] ?? DEFAULT_GRID_PROFILE;
+  var GRID_DENSITY_FACTOR = {
+    compact: 0.8,
+    standard: 1,
+    large: 1.3,
+    xl: 1.65
+  };
+  function getGridProfileForPlatform(platform, density = "standard") {
+    const base = platform === "all" ? DEFAULT_GRID_PROFILE : GRID_PROFILE_BY_PLATFORM[platform] ?? DEFAULT_GRID_PROFILE;
+    const factor = GRID_DENSITY_FACTOR[density] ?? 1;
+    return { aspectRatio: base.aspectRatio, minColWidth: Math.round(base.minColWidth * factor) };
+  }
+  var GRID_DENSITY_ORDER = ["compact", "standard", "large", "xl"];
+  var GRID_DENSITY_LABEL = {
+    compact: "S",
+    standard: "M",
+    large: "L",
+    xl: "XL"
+  };
+  function GridDensityPicker({
+    value,
+    onChange,
+    label
+  }) {
+    return /* @__PURE__ */ jsx("div", { className: "flex items-center gap-1", title: label, "aria-label": label, children: GRID_DENSITY_ORDER.map((density) => {
+      const selected = density === value;
+      return /* @__PURE__ */ jsx(
+        "button",
+        {
+          type: "button",
+          onClick: () => onChange(density),
+          className: `h-9 rounded-full border px-3 text-[0.6rem] font-normal uppercase tracking-[0.2em] transition-all ${selected ? activePillClass : neutralPillClass}`,
+          children: GRID_DENSITY_LABEL[density]
+        },
+        density
+      );
+    }) });
   }
   function gridContainerStyle(profile) {
     return {
@@ -1713,6 +1757,7 @@
   function GamesGrid({
     games,
     activePlatform,
+    gridDensity,
     launchState,
     editingGameId,
     onEditGame,
@@ -1724,7 +1769,7 @@
     const { t } = useLang();
     const platformOptions = getPlatformOptions();
     const coreSuggestions = getCoreSuggestions();
-    const gridProfile = getGridProfileForPlatform(activePlatform);
+    const gridProfile = getGridProfileForPlatform(activePlatform, gridDensity);
     if (games.length === 0) {
       return /* @__PURE__ */ jsx("div", { className: "rounded-2xl border border-dashed border-white/10 bg-white/[0.02] p-8 text-sm text-slate-400", children: t("browserEmptyLibrary") });
     }
@@ -1733,7 +1778,7 @@
       const effectiveCore = getEffectiveCoreId(game);
       const editing = editingGameId === game.id;
       const displayCoverUrl = game.coverUrl ?? game.metadata?.coverUrl ?? null;
-      const posterAspectRatio = getGridProfileForPlatform(effectivePlatform).aspectRatio;
+      const posterAspectRatio = getGridProfileForPlatform(effectivePlatform, gridDensity).aspectRatio;
       const regionLabel = getRegionLabel(game.metadata?.region, t);
       return /* @__PURE__ */ jsxs(
         "div",
@@ -1834,6 +1879,7 @@
     const [games, setGames] = useState(() => getStoredGames());
     const [platform, setPlatform] = useState("all");
     const [query, setQuery] = useState("");
+    const [gridDensity, setGridDensityState] = useState(() => getGridDensity());
     const [statusMessage, setStatusMessage] = useState(null);
     const [launchState, setLaunchState] = useState({
       gameId: null,
@@ -2533,7 +2579,18 @@
               className: "h-9 w-full max-w-xs rounded-full border border-white/[0.08] bg-white/[0.04] px-4 text-[0.8rem] text-white placeholder:text-slate-500 outline-none transition-all focus:border-accent-400/30 focus:bg-white/[0.07]"
             }
           ),
-          /* @__PURE__ */ jsx(PlatformChips, { active: resolvedPlatform, onChange: setPlatform, games })
+          /* @__PURE__ */ jsx(PlatformChips, { active: resolvedPlatform, onChange: setPlatform, games }),
+          /* @__PURE__ */ jsx(
+            GridDensityPicker,
+            {
+              value: gridDensity,
+              onChange: (value) => {
+                setGridDensityState(value);
+                setGridDensity(value);
+              },
+              label: t("browserCardSize")
+            }
+          )
         ] }),
         statusMessage ? /* @__PURE__ */ jsx("p", { className: "text-sm text-slate-400", children: statusMessage }) : null,
         posterSyncProgress ? /* @__PURE__ */ jsxs("p", { className: "text-xs uppercase tracking-[0.16em] text-slate-500", children: [
@@ -2552,6 +2609,7 @@
       /* @__PURE__ */ jsx(
         GamesGrid,
         {
+          gridDensity,
           games: filteredGames,
           activePlatform: resolvedPlatform,
           launchState,
@@ -3609,7 +3667,7 @@
     }
   };
 
-  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-MbljoJ/wrapper-entry.ts
+  // ../../../../private/var/folders/lc/1hd2j0b57z10tx5mflylq4r80000gp/T/lumioplay-build-PJrV59/wrapper-entry.ts
   var plugin = Reflect.get(runtime_exports, "default") ?? Reflect.get(runtime_exports, "LumioplayPlugin") ?? Object.values(runtime_exports).find((value) => value && typeof value === "object" && "id" in value && "register" in value);
   if (!plugin) {
     throw new Error("Could not find Lumioplay plugin export in bundle.");
